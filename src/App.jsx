@@ -14,6 +14,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import AdminUsers from "./pages/admin/Users";
 import AdminJobs from './pages/admin/Jobs';
 import AdminDisputes from "./pages/admin/Disputes";
+import DisputeDetail from "./pages/admin/DisputeDetail";
 
 function App() {
   return (
@@ -29,6 +30,8 @@ function App() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="jobs" element={<AdminJobs />} /> 
             <Route path="disputes" element={<AdminDisputes />} />
+            <Route path="disputes/:disputeId" element={<DisputeDetail />} />
+            
           </Route>
 
           {/* Default – login ga yo‘naltirish */}

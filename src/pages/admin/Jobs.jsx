@@ -34,7 +34,7 @@ export default function AdminJobs() {
       id: 1,
       title: "React JS da responsiv sayt",
       client: "Kamola Company",
-      budget: "5,000,000 so‘m",
+      budget: "5,000,000 so'm",
       status: "open",
       proposals: 12,
       boosted: true,
@@ -44,7 +44,7 @@ export default function AdminJobs() {
       id: 2,
       title: "Flutter mobil ilova",
       client: "Tech Startup",
-      budget: "15,000,000 so‘m",
+      budget: "15,000,000 so'm",
       status: "in_progress",
       proposals: 8,
       boosted: false,
@@ -54,7 +54,7 @@ export default function AdminJobs() {
       id: 3,
       title: "Logo dizayn",
       client: "Shaxsiy",
-      budget: "1,500,000 so‘m",
+      budget: "1,500,000 so'm",
       status: "completed",
       proposals: 25,
       boosted: false,
@@ -64,7 +64,7 @@ export default function AdminJobs() {
       id: 4,
       title: "Backend API (Node.js)",
       client: "E-commerce",
-      budget: "10,000,000 so‘m",
+      budget: "10,000,000 so'm",
       status: "cancelled",
       proposals: 5,
       boosted: true,
@@ -100,7 +100,7 @@ export default function AdminJobs() {
           <InputLeftElement>
             <SearchIcon color="gray.300" />
           </InputLeftElement>
-          <Input placeholder="Loyiha nomi, client yoki ID bo‘yicha qidirish" />
+          <Input placeholder="Loyiha nomi, client yoki ID bo'yicha qidirish" />
         </InputGroup>
 
         <Select maxW="200px" placeholder="Status">
@@ -160,7 +160,7 @@ export default function AdminJobs() {
                       size="sm"
                       colorScheme="blue"
                       variant="ghost"
-                      aria-label="Ko‘rish"
+                      aria-label="Ko'rish"
                     />
                     <IconButton
                       icon={<EditIcon />}
@@ -174,7 +174,7 @@ export default function AdminJobs() {
                       size="sm"
                       colorScheme="red"
                       variant="ghost"
-                      aria-label="O‘chirish"
+                      aria-label="O'chirish"
                     />
                   </HStack>
                 </Td>

@@ -25,7 +25,7 @@ const menuItems = [
   { icon: Users, label: "Foydalanuvchilar", path: "/admin/users" },
   { icon: Briefcase, label: "Loyihalar", path: "/admin/jobs" },
   { icon: MessageSquare, label: "Chatlar", path: "/admin/chats" },
-  { icon: DollarSign, label: "To‘lovlar", path: "/admin/payments" },
+  { icon: DollarSign, label: "To'lovlar", path: "/admin/payments" },
   { icon: AlertTriangle, label: "Nizolar", path: "/admin/disputes" },  // <--- YANGI MENU
   { icon: Settings, label: "Sozlamalar", path: "/admin/settings" },
 ];

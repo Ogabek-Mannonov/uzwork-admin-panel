@@ -17,7 +17,7 @@ import {
   Flex,
   Avatar,
   Badge,
-  VStack,  // <--- BU YERDA QO‘SHILDI
+  VStack,  // <--- BU YERDA QO'SHILDI
   Icon,
 } from "@chakra-ui/react";
 import {
@@ -35,14 +35,14 @@ export default function AdminDashboard() {
   const stats = [
     { label: "Jami foydalanuvchilar", value: "8,542", change: "+12.5%", trend: "increase" },
     { label: "Faol loyihalar", value: "126", change: "+8.3%", trend: "increase" },
-    { label: "Umumiy daromad", value: "1.24 mlrd so‘m", change: "+23.1%", trend: "increase" },
-    { label: "Platforma haqi", value: "248 mln so‘m", change: "+18.7%", trend: "increase" },
+    { label: "Umumiy daromad", value: "1.24 mlrd so'm", change: "+23.1%", trend: "increase" },
+    { label: "Platforma haqi", value: "248 mln so'm", change: "+18.7%", trend: "increase" },
   ];
 
   const recentActivity = [
     { name: "Ogabek Developer", action: "Yangi loyiha joylashtirdi", time: "5 daqiqa oldin" },
     { name: "Ali Freelancer", action: "Taklif yubordi", time: "12 daqiqa oldin" },
-    { name: "Kamola Client", action: "To‘lov amalga oshirdi", time: "25 daqiqa oldin" },
+    { name: "Kamola Client", action: "To'lov amalga oshirdi", time: "25 daqiqa oldin" },
     { name: "Rustam Admin", action: "Foydalanuvchini tasdiqladi", time: "1 soat oldin" },
   ];
 
@@ -75,10 +75,10 @@ export default function AdminDashboard() {
       </Grid>
 
       <SimpleGrid columns={{ base: 1, lg: 2 }} gap={8}>
-        {/* So‘nggi faollik */}
+        {/* So'nggi faollik */}
         <Card>
           <CardHeader>
-            <Heading size="md">So‘nggi faollik</Heading>
+            <Heading size="md">So'nggi faollik</Heading>
           </CardHeader>
           <CardBody>
             <VStack align="stretch" spacing={4}>

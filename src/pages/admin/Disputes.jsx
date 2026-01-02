@@ -38,8 +38,8 @@ export default function AdminDisputes() {
       client: "Kamola Company",
       freelancer: "Ogabek Dev",
       raisedBy: "client",
-      reason: "Ish to‘liq bajarilmadi, admin panel ishlamayapti",
-      amount: "5,000,000 so‘m",
+      reason: "Ish to'liq bajarilmadi, admin panel ishlamayapti",
+      amount: "5,000,000 so'm",
       status: "open",
       createdAt: "2026-01-02",
     },
@@ -49,8 +49,8 @@ export default function AdminDisputes() {
       client: "Shaxsiy",
       freelancer: "Sardor Designer",
       raisedBy: "freelancer",
-      reason: "Client qo‘shimcha o‘zgartirishlar talab qilyapti, lekin pul to‘lamayapti",
-      amount: "1,500,000 so‘m",
+      reason: "Client qo'shimcha o'zgartirishlar talab qilyapti, lekin pul to'lamayapti",
+      amount: "1,500,000 so'm",
       status: "in_review",
       createdAt: "2025-12-30",
     },
@@ -61,7 +61,7 @@ export default function AdminDisputes() {
       freelancer: "Ali Pro",
       raisedBy: "client",
       reason: "Ilova App Store da rad etildi",
-      amount: "15,000,000 so‘m",
+      amount: "15,000,000 so'm",
       status: "resolved",
       createdAt: "2025-12-25",
     },
@@ -76,7 +76,7 @@ export default function AdminDisputes() {
     };
     const label = {
       open: "Ochiq",
-      in_review: "Ko‘rib chiqilmoqda",
+      in_review: "Ko'rib chiqilmoqda",
       resolved: "Hal qilingan",
       cancelled: "Bekor qilingan",
     };
@@ -148,7 +148,7 @@ export default function AdminDisputes() {
                         size="sm"
                         colorScheme="blue"
                         variant="ghost"
-                        aria-label="Ko‘rish"
+                        aria-label="Ko'rish"
                       />
                     </Link>
                     {dispute.status === "open" && (
