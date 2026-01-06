@@ -9,7 +9,6 @@ import {
   Th,
   Td,
   Badge,
-  Button,
   Flex,
   Text,
   Input,
@@ -19,13 +18,9 @@ import {
   HStack,
   IconButton,
   Avatar,
-  Tag,
-  TagLabel,
-  TagCloseButton,
-  Wrap,
-  WrapItem,
 } from "@chakra-ui/react";
-import { SearchIcon, EditIcon, DeleteIcon, StarIcon, ViewIcon } from "@chakra-ui/icons";
+import { SearchIcon, ViewIcon, EditIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
+import { Link } from "react-router-dom";
 
 export default function AdminJobs() {
   // Mock data – keyin backend dan olamiz
@@ -136,10 +131,14 @@ export default function AdminJobs() {
             {jobs.map((job) => (
               <Tr key={job.id} _hover={{ bg: "gray.50" }}>
                 <Td>
-                  <Flex align="center" gap={3}>
-                    {job.boosted && <StarIcon color="yellow.500" />}
-                    <Text fontWeight="medium">{job.title}</Text>
-                  </Flex>
+                  <Link to={`/admin/jobs/${job.id}`}>
+                    <Flex align="center" gap={3} cursor="pointer">
+                      {job.boosted && <StarIcon color="yellow.500" />}
+                      <Text fontWeight="medium" color="blue.600">
+                        {job.title}
+                      </Text>
+                    </Flex>
+                  </Link>
                 </Td>
                 <Td>
                   <Flex align="center" gap={2}>
@@ -155,13 +154,15 @@ export default function AdminJobs() {
                 <Td>{job.createdAt}</Td>
                 <Td>
                   <HStack spacing={2}>
-                    <IconButton
-                      icon={<ViewIcon />}
-                      size="sm"
-                      colorScheme="blue"
-                      variant="ghost"
-                      aria-label="Ko'rish"
-                    />
+                    <Link to={`/admin/jobs/${job.id}`}>
+                      <IconButton
+                        icon={<ViewIcon />}
+                        size="sm"
+                        colorScheme="blue"
+                        variant="ghost"
+                        aria-label="Ko'rish"
+                      />
+                    </Link>
                     <IconButton
                       icon={<EditIcon />}
                       size="sm"

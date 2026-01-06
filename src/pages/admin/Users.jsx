@@ -20,6 +20,7 @@ import {
   HStack,
 } from "@chakra-ui/react";
 import { SearchIcon, EditIcon, NotAllowedIcon, CheckCircleIcon } from "@chakra-ui/icons";
+import { Link } from "react-router-dom";
 
 export default function AdminUsers() {
   const users = [
@@ -63,10 +64,14 @@ export default function AdminUsers() {
           {users.map((user) => (
             <Tr key={user.id}>
               <Td>
-                <Flex align="center" gap={3}>
-                  <Avatar name={user.name} size="md" />
-                  <Text fontWeight="medium">{user.name}</Text>
-                </Flex>
+                <Link to={`/admin/users/${user.id}`}>
+                  <Flex align="center" gap={3} cursor="pointer" _hover={{ opacity: 0.8 }}>
+                    <Avatar name={user.name} size="md" />
+                    <Text fontWeight="medium" color="blue.600">
+                      {user.name}
+                    </Text>
+                  </Flex>
+                </Link>
               </Td>
               <Td>{user.username}</Td>
               <Td>{user.email}</Td>
