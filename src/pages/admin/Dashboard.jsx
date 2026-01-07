@@ -33,36 +33,35 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
-import api from "../../lib/api"; // admin panel uchun api utils
+import api from "../../lib/api";
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState({});
   const [recentActivity, setRecentActivity] = useState([]);
-  const [quickStats, setQuickStats] = useState(null);
+  const [quickStats, setQuickStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-
-        // Backend dan barcha ma’lumotni bir so‘rovda olish (masalan /admin/dashboard)
         const res = await api("/admin/dashboard");
 
-        setStats(res.data.stats); // masalan: users, activeJobs, totalRevenue, platformFee
-        setRecentActivity(res.data.recentActivity);
-        setQuickStats(res.data.quickStats); // pendingMilestones, completedThisMonth, openDisputes
+        // Backend dan kelgan ma'lumotlar
+        setStats(res.data.stats || {});
+        setRecentActivity(res.data.recentActivity || []);
+        setQuickStats(res.data.quickStats || {});
       } catch (err) {
-        console.error("Dashboard data olishda xato:", err);
+        console.error("Dashboard ma'lumot olishda xato:", err);
         setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDashboardData();
+    fetchData();
   }, []);
 
   if (loading) {
@@ -78,7 +77,7 @@ export default function AdminDashboard() {
 
   if (error) {
     return (
-      <Alert status="error" borderRadius="lg">
+      <Alert status="error" borderRadius="lg" my={8}>
         <AlertIcon />
         <Text>{error}</Text>
       </Alert>
@@ -99,11 +98,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Jami foydalanuvchilar</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.totalUsers || "0"}
+                  {stats.totalUsers || "0"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {stats?.usersGrowth || "+0%"}
+                  {stats.usersGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -116,11 +115,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Faol loyihalar</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.activeJobs || "0"}
+                  {stats.activeJobs || "0"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {stats?.jobsGrowth || "+0%"}
+                  {stats.jobsGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -133,11 +132,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Umumiy daromad</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.totalRevenue || "0 so‘m"}
+                  {stats.totalRevenue || "0 so‘m"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {stats?.revenueGrowth || "+0%"}
+                  {stats.revenueGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -150,11 +149,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Platforma haqi</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.platformFee || "0 so‘m"}
+                  {stats.platformFee || "0 so‘m"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {stats?.feeGrowth || "+0%"}
+                  {stats.feeGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -201,7 +200,7 @@ export default function AdminDashboard() {
                   <Text>Kutilayotgan milestone lar</Text>
                 </Flex>
                 <Badge colorScheme="orange" fontSize="lg">
-                  {quickStats?.pendingMilestones || 0}
+                  {quickStats.pendingMilestones || 0}
                 </Badge>
               </Flex>
 
@@ -211,7 +210,7 @@ export default function AdminDashboard() {
                   <Text>Tugallangan loyihalar (bu oy)</Text>
                 </Flex>
                 <Badge colorScheme="green" fontSize="lg">
-                  {quickStats?.completedThisMonth || 0}
+                  {quickStats.completedThisMonth || 0}
                 </Badge>
               </Flex>
 
@@ -221,7 +220,7 @@ export default function AdminDashboard() {
                   <Text>Ochiq nizolar</Text>
                 </Flex>
                 <Badge colorScheme="red" fontSize="lg">
-                  {quickStats?.openDisputes || 0}
+                  {quickStats.openDisputes || 0}
                 </Badge>
               </Flex>
             </VStack>
