@@ -1,4 +1,5 @@
 // src/pages/AdminLogin.jsx
+import { useState } from "react";
 import {
   Box,
   Button,
@@ -9,17 +10,67 @@ import {
   FormControl,
   FormLabel,
   Input,
+  Alert,
+  AlertIcon,
+  Spinner,
 } from "@chakra-ui/react";
 
 export default function AdminLogin() {
+  const [identifier, setIdentifier] = useState(""); // email yoki username
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: identifier.includes("@") ? identifier : undefined,
+          phone: identifier.startsWith("+") ? identifier : undefined,
+          username: !identifier.includes("@") && !identifier.startsWith("+") ? identifier : undefined,
+          password,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Kirishda xato yuz berdi");
+      }
+
+      // Tokenlarni saqlash
+      localStorage.setItem("accessToken", data.data.accessToken);
+      localStorage.setItem("refreshToken", data.data.refreshToken);
+
+      // Role admin bo‘lsa kirsin
+      if (data.data.user.role !== "admin") {
+        throw new Error("Faqat admin foydalanuvchilar kirishi mumkin");
+      }
+
+      // Muvaffaqiyatli – admin panelga yo‘naltirish
+      window.location.href = "/admin";
+    } catch (err) {
+      setError(err.message);
+      // Tokenlarni o‘chirish (xavfsizlik uchun)
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Center
-      minH="100vh"
-      bgGradient="linear(to-br, blue.50, indigo.100)"
-      p={4}
-    >
+    <Center minH="100vh" bgGradient="linear(to-br, blue.50, indigo.100)" p={4}>
       <Box
-        w={{ base: "90%", sm: "400px", md: "500px" }}  // katta ekranlarda kengroq
+        w={{ base: "90%", sm: "400px", md: "500px" }}
         p={10}
         bg="white"
         borderRadius="2xl"
@@ -27,7 +78,7 @@ export default function AdminLogin() {
         border="1px solid"
         borderColor="gray.200"
       >
-        <VStack spacing={8}>
+        <VStack spacing={8} as="form" onSubmit={handleLogin}>
           <VStack spacing={2}>
             <Heading size="2xl" color="blue.800" fontWeight="bold">
               UzWork Admin
@@ -37,18 +88,28 @@ export default function AdminLogin() {
             </Text>
           </VStack>
 
+          {error && (
+            <Alert status="error" borderRadius="lg">
+              <AlertIcon />
+              <Text>{error}</Text>
+            </Alert>
+          )}
+
           <FormControl>
             <FormLabel fontSize="lg" fontWeight="medium">
               Email yoki Username
             </FormLabel>
             <Input
-              placeholder="admin@uzwork.uz"
+              placeholder="admin@uzwork.uz yoki admin"
               size="lg"
               h="56px"
               fontSize="lg"
               borderColor="gray.300"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               _hover={{ borderColor: "blue.400" }}
               _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #4299e1" }}
+              required
             />
           </FormControl>
 
@@ -62,12 +123,16 @@ export default function AdminLogin() {
               h="56px"
               fontSize="lg"
               borderColor="gray.300"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               _hover={{ borderColor: "blue.400" }}
               _focus={{ borderColor: "blue.500", boxShadow: "0 0 0 1px #4299e1" }}
+              required
             />
           </FormControl>
 
           <Button
+            type="submit"
             colorScheme="blue"
             size="lg"
             h="56px"
@@ -78,6 +143,8 @@ export default function AdminLogin() {
             boxShadow="lg"
             _hover={{ transform: "translateY(-2px)", boxShadow: "xl" }}
             transition="all 0.2s"
+            isLoading={loading}
+            loadingText="Kirilmoqda..."
           >
             Kirish
           </Button>
