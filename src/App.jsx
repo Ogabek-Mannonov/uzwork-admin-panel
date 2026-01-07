@@ -1,6 +1,6 @@
-// src/App.jsx
+// src/App.jsx – YANGILANGAN VARIANT (BrowserRouter o‘chirildi)
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom'; // BrowserRouter import o‘chirildi
 import { ChakraProvider } from '@chakra-ui/react';
 
 // Pages
@@ -26,31 +26,29 @@ import UserDetail from './pages/admin/UserDetail';
 function App() {
   return (
     <ChakraProvider>
-      <Router>
-        <Routes>
-          {/* Admin login sahifasi – himoyasiz */}
-          <Route path="/admin/login" element={<AdminLogin />} />
+      <Routes>
+        {/* Admin login sahifasi – himoyasiz */}
+        <Route path="/admin/login" element={<AdminLogin />} />
 
-          {/* Admin panel – himoyalangan (keyin middleware qo‘shamiz) */}
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminDashboard />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="users/:userId" element={<UserDetail />} />
-            <Route path="jobs" element={<AdminJobs />} /> 
-            <Route path="jobs/:jobId" element={<JobDetail />} />
-            <Route path="disputes" element={<AdminDisputes />} />
-            <Route path="disputes/:disputeId" element={<DisputeDetail />} />
-            <Route path="payments" element={<AdminPayments />} />
-            <Route path="payments/:paymentId" element={<PaymentDetail />} />
-            <Route path="settings" element={<AdminSettings />} />
-            <Route path="chats" element={<AdminChats />} />
-            <Route path="chats/:chatId" element={<ChatDetail />} />
-          </Route>
+        {/* Admin panel – himoyalangan */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="users/:userId" element={<UserDetail />} />
+          <Route path="jobs" element={<AdminJobs />} /> 
+          <Route path="jobs/:jobId" element={<JobDetail />} />
+          <Route path="disputes" element={<AdminDisputes />} />
+          <Route path="disputes/:disputeId" element={<DisputeDetail />} />
+          <Route path="payments" element={<AdminPayments />} />
+          <Route path="payments/:paymentId" element={<PaymentDetail />} />
+          <Route path="settings" element={<AdminSettings />} />
+          <Route path="chats" element={<AdminChats />} />
+          <Route path="chats/:chatId" element={<ChatDetail />} />
+        </Route>
 
-          {/* Default – login ga yo‘naltirish */}
-          <Route path="*" element={<AdminLogin />} />
-        </Routes>
-      </Router>
+        {/* Default – login ga yo‘naltirish */}
+        <Route path="*" element={<AdminLogin />} />
+      </Routes>
     </ChakraProvider>
   );
 }
