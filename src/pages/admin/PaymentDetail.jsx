@@ -1,4 +1,5 @@
 // src/pages/admin/PaymentDetail.jsx
+import React from "react";
 import {
   Box,
   Heading,

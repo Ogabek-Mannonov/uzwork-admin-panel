@@ -1,4 +1,5 @@
 // src/components/layout/Sidebar.jsx
+import React from "react";
 import {
   Box,
   VStack,

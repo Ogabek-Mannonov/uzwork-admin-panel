@@ -1,4 +1,5 @@
 // src/components/layout/MobileSidebar.jsx
+import React from "react";
 import {
   Drawer,
   DrawerBody,

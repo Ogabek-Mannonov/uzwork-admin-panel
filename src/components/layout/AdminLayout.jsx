@@ -3,6 +3,7 @@ import { Box, Flex, useBreakpointValue } from "@chakra-ui/react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import MobileSidebar from "./MobileSidebar";
+import React from "react";
 
 export default function AdminLayout() {
   const isDesktop = useBreakpointValue({ base: false, lg: true });

@@ -1,4 +1,5 @@
 // src/pages/admin/ChatDetail.jsx
+import React from "react";
 import {
   Box,
   Heading,

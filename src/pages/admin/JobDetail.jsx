@@ -1,4 +1,5 @@
 // src/pages/admin/JobDetail.jsx
+import React from "react";
 import {
   Box,
   Heading,
