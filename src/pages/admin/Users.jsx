@@ -1,5 +1,5 @@
 // src/pages/admin/Users.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Heading,
@@ -19,16 +19,59 @@ import {
   IconButton,
   Select,
   HStack,
+  Spinner,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
 import { SearchIcon, EditIcon, NotAllowedIcon, CheckCircleIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
+import api from "../../lib/api"; // admin panel uchun API
 
 export default function AdminUsers() {
-  const users = [
-    { id: 1, name: "Ogabek Developer", username: "ogabek_dev", email: "ogabek@example.com", role: "freelancer", status: "active" },
-    { id: 2, name: "Kamola Client", username: "kamola_client", email: "kamola@company.uz", role: "client", status: "active" },
-    { id: 3, name: "Ali Freelancer", username: "ali_pro", email: "ali@gmail.com", role: "freelancer", status: "blocked" },
-  ];
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Backenddan real foydalanuvchilar ro‘yxatini olamiz
+        const res = await api("/admin/users");
+
+        setUsers(res.data.users || []);
+      } catch (err) {
+        console.error("Foydalanuvchilarni olishda xato:", err);
+        setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" h="70vh">
+        <Spinner size="xl" color="blue.500" thickness="4px" />
+        <Text ml={4} fontSize="lg">
+          Foydalanuvchilar yuklanmoqda...
+        </Text>
+      </Flex>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert status="error" borderRadius="lg" my={8}>
+        <AlertIcon />
+        <Text>{error}</Text>
+      </Alert>
+    );
+  }
 
   return (
     <Box>
@@ -67,9 +110,9 @@ export default function AdminUsers() {
               <Td>
                 <Link to={`/admin/users/${user.id}`}>
                   <Flex align="center" gap={3} cursor="pointer" _hover={{ opacity: 0.8 }}>
-                    <Avatar name={user.name} size="md" />
+                    <Avatar name={`${user.first_name || ''} ${user.last_name || ''}`} size="md" />
                     <Text fontWeight="medium" color="blue.600">
-                      {user.name}
+                      {user.first_name} {user.last_name}
                     </Text>
                   </Flex>
                 </Link>

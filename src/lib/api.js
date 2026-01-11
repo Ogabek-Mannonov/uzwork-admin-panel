@@ -16,11 +16,11 @@ const api = async (endpoint, options = {}) => {
   const response = await fetch(`${API_URL}${endpoint}`, config);
 
   // Agar token muddati tugagan bo‘lsa – login ga yo‘naltir
-  if (response.status === 401) {
-    localStorage.removeItem("accessToken");
-    window.location.href = "/admin/login";
-    return;
-  }
+  // if (response.status === 401) {
+  //   localStorage.removeItem("accessToken");
+  //   window.location.href = "/admin/login";
+  //   return;
+  // }
 
   const data = await response.json();
 
