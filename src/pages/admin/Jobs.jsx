@@ -202,10 +202,12 @@ export default function AdminJobs() {
                   </Td>
                   <Td>{getStatusBadge(job.status)}</Td>
                   <Td>
-                    {new Date(job.created_at).toLocaleDateString("uz-UZ", {
+                    {new Date(job.created_at).toLocaleString("uz-UZ", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
+                      hour: "numeric",
+                      minute: "numeric",
                     })}
                   </Td>
                   <Td>
