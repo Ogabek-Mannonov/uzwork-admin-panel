@@ -37,28 +37,32 @@ import api from "../../lib/api";
 export default function JobDetail() {
   const { jobId } = useParams();
   const [job, setJob] = useState(null);
+  const [proposals, setProposals] = useState([]); // takliflar ro‘yxati
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchJobDetail = async () => {
+    const fetchJobAndProposals = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Real backenddan loyiha tafsilotlarini olamiz
-        const res = await api(`/admin/jobs/${jobId}`);
+        // 1. Loyiha tafsilotlarini olish
+        const jobRes = await api(`/admin/jobs/${jobId}`);
+        setJob(jobRes.data.job || null);
 
-        setJob(res.data.job || null);
+        // 2. Ushbu loyihaga yuborilgan takliflar ro‘yxatini olish
+        const proposalsRes = await api(`/proposals/project/${jobId}`);
+        setProposals(proposalsRes.data.proposals || []);
       } catch (err) {
-        console.error("Loyiha tafsilotlarini olishda xato:", err);
-        setError("Loyiha ma'lumotlarini yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
+        console.error("Loyiha va takliflar olishda xato:", err);
+        setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
       } finally {
         setLoading(false);
       }
     };
 
-    if (jobId) fetchJobDetail();
+    if (jobId) fetchJobAndProposals();
   }, [jobId]);
 
   if (loading) {
@@ -66,7 +70,7 @@ export default function JobDetail() {
       <Flex justify="center" align="center" h="70vh">
         <Spinner size="xl" color="blue.500" thickness="4px" />
         <Text ml={4} fontSize="lg">
-          Loyiha tafsilotlari yuklanmoqda...
+          Loyiha va takliflar yuklanmoqda...
         </Text>
       </Flex>
     );
@@ -156,14 +160,17 @@ export default function JobDetail() {
                   <Box>
                     <Text fontWeight="semibold">{job.client_name}</Text>
                     <Text fontSize="sm" color="gray.600">@{job.client_username}</Text>
-                    {/* Agar rating bo‘lsa qo‘shing */}
                   </Box>
                 </Flex>
               </Box>
 
               <Box>
                 <Text fontWeight="medium" color="gray.600">Byudjet</Text>
-                <Text fontSize="2xl" fontWeight="bold" mt={1}>{job.budget}</Text>
+                <Text fontSize="2xl" fontWeight="bold" mt={1}>
+                  {job.budget_min && job.budget_max
+                    ? `${job.budget_min.toLocaleString()} - ${job.budget_max.toLocaleString()} ${job.currency || 'UZS'}`
+                    : "Belgilanmagan"}
+                </Text>
               </Box>
 
               <Box>
@@ -180,7 +187,7 @@ export default function JobDetail() {
 
               <Box>
                 <Text fontWeight="medium" color="gray.600">Takliflar soni</Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>{job.proposals_count || 0} ta</Text>
+                <Text fontSize="xl" fontWeight="bold" mt={1}>{proposals.length} ta</Text>
               </Box>
 
               <Box>
@@ -205,25 +212,41 @@ export default function JobDetail() {
             <Text whiteSpace="pre-wrap">{job.description}</Text>
           </Box>
 
-          {/* Takliflar table */}
-          {job.proposals && job.proposals.length > 0 && (
+          {/* Takliflar jadvali – real takliflar */}
+          {proposals.length > 0 ? (
             <Box mt={8}>
-              <Heading size="md" mb={4}>Takliflar ({job.proposals.length})</Heading>
+              <Heading size="md" mb={4}>Takliflar ({proposals.length})</Heading>
               <Table variant="simple">
                 <Thead>
                   <Tr>
                     <Th>Freelancer</Th>
                     <Th>Taklif narxi</Th>
                     <Th>Muddat</Th>
+                    <Th>Status</Th>
                     <Th>Amallar</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {job.proposals.map((p, index) => (
-                    <Tr key={index}>
-                      <Td fontWeight="medium">{p.freelancer}</Td>
-                      <Td fontWeight="semibold">{p.proposed_price}</Td>
-                      <Td>{p.proposed_duration}</Td>
+                  {proposals.map((p) => (
+                    <Tr key={p.id}>
+                      <Td fontWeight="medium">
+                        {p.freelancer_first_name} {p.freelancer_last_name}
+                      </Td>
+                      <Td fontWeight="semibold">
+                        {p.proposed_price ? `${p.proposed_price.toLocaleString()} so‘m` : "Noma'lum"}
+                      </Td>
+                      <Td>{p.proposed_duration ? `${p.proposed_duration} kun` : "Belgilanmagan"}</Td>
+                      <Td>
+                        <Badge colorScheme={
+                          p.status === "pending" ? "yellow" :
+                          p.status === "accepted" ? "green" :
+                          p.status === "rejected" ? "red" : "gray"
+                        }>
+                          {p.status === "pending" ? "Kutilmoqda" :
+                           p.status === "accepted" ? "Qabul qilingan" :
+                           p.status === "rejected" ? "Rad etilgan" : p.status}
+                        </Badge>
+                      </Td>
                       <Td>
                         <Button size="sm" colorScheme="blue" variant="ghost">
                           Ko‘rish
@@ -233,6 +256,10 @@ export default function JobDetail() {
                   ))}
                 </Tbody>
               </Table>
+            </Box>
+          ) : (
+            <Box mt={8}>
+              <Text color="gray.500">Hozircha bu loyihaga taklif yuborilmagan</Text>
             </Box>
           )}
         </CardBody>
