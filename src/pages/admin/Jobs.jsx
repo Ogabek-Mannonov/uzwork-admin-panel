@@ -35,6 +35,39 @@ export default function AdminJobs() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedBoost, setSelectedBoost] = useState("all");
 
+  // Sana va vaqtni xavfsiz formatlash funksiyasi
+  const formatDate = (dateString) => {
+    if (!dateString) return "—";
+
+    try {
+      // "M01", "MOI" kabi xatolarni tozalash
+      let cleaned = dateString
+        .replace(/MOI?/gi, "01")
+        .replace(/M0?(\d+)/g, (match, p1) => p1.padStart(2, "0"));
+
+      const date = new Date(cleaned);
+
+      if (isNaN(date.getTime())) {
+        // Agar hali ham xato bo'lsa, xom qiymatni biroz chiroyli qilamiz
+        return cleaned
+          .replace("T", " ")
+          .replace(/\.\d{3}Z?$/, "")
+          .slice(0, 16);
+      }
+
+      return date.toLocaleString("uz-UZ", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    } catch (err) {
+      return dateString.replace("T", " ").slice(0, 16) || "—";
+    }
+  };
+
   useEffect(() => {
     const fetchJobs = async () => {
       try {
@@ -59,21 +92,19 @@ export default function AdminJobs() {
   useEffect(() => {
     let result = [...jobs];
 
-    // Qidiruv
     if (searchTerm.trim()) {
       const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter((job) =>
-        (job.title || "").toLowerCase().includes(lowerSearch) ||
-        (job.client_name || "").toLowerCase().includes(lowerSearch)
+      result = result.filter(
+        (job) =>
+          (job.title || "").toLowerCase().includes(lowerSearch) ||
+          (job.client_name || "").toLowerCase().includes(lowerSearch)
       );
     }
 
-    // Status filtri
     if (selectedStatus !== "all") {
       result = result.filter((job) => job.status === selectedStatus);
     }
 
-    // Boost filtri
     if (selectedBoost !== "all") {
       const isBoosted = selectedBoost === "boosted";
       result = result.filter((job) => job.is_boosted === isBoosted);
@@ -186,7 +217,7 @@ export default function AdminJobs() {
                   </Td>
                   <Td>
                     <HStack>
-                      <Avatar name={job.client_name} size="xs" />
+                      <Avatar name={job.client_name || "M"} size="xs" />
                       <Text>{job.client_name || "Noma'lum"}</Text>
                     </HStack>
                   </Td>
@@ -201,14 +232,8 @@ export default function AdminJobs() {
                     </Badge>
                   </Td>
                   <Td>{getStatusBadge(job.status)}</Td>
-                  <Td>
-                    {new Date(job.created_at).toLocaleString("uz-UZ", {
-                      year: "numeric.",
-                      month: "long.",
-                      day: "numeric.",
-                      hour: "numeric",
-                      minute: "numeric",
-                    })}
+                  <Td fontSize="sm" whiteSpace="nowrap">
+                    {formatDate(job.created_at)}
                   </Td>
                   <Td>
                     <HStack spacing={1}>
