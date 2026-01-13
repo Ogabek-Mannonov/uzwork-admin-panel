@@ -1,5 +1,5 @@
 // src/pages/admin/Jobs.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Heading,
@@ -19,54 +19,39 @@ import {
   HStack,
   IconButton,
   Avatar,
+  Spinner,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
 import { SearchIcon, ViewIcon, EditIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
+import api from "../../lib/api";
 
 export default function AdminJobs() {
-  // Mock data – keyin backend dan olamiz
-  const jobs = [
-    {
-      id: 1,
-      title: "React JS da responsiv sayt",
-      client: "Kamola Company",
-      budget: "5,000,000 so'm",
-      status: "open",
-      proposals: 12,
-      boosted: true,
-      createdAt: "2026-01-01",
-    },
-    {
-      id: 2,
-      title: "Flutter mobil ilova",
-      client: "Tech Startup",
-      budget: "15,000,000 so'm",
-      status: "in_progress",
-      proposals: 8,
-      boosted: false,
-      createdAt: "2025-12-28",
-    },
-    {
-      id: 3,
-      title: "Logo dizayn",
-      client: "Shaxsiy",
-      budget: "1,500,000 so'm",
-      status: "completed",
-      proposals: 25,
-      boosted: false,
-      createdAt: "2025-12-20",
-    },
-    {
-      id: 4,
-      title: "Backend API (Node.js)",
-      client: "E-commerce",
-      budget: "10,000,000 so'm",
-      status: "cancelled",
-      proposals: 5,
-      boosted: true,
-      createdAt: "2025-12-15",
-    },
-  ];
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Real backenddan loyihalar ro‘yxatini olamiz
+        const res = await api("/admin/jobs");
+
+        setJobs(res.data.jobs || []);
+      } catch (err) {
+        console.error("Loyihalarni olishda xato:", err);
+        setError("Loyihalarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, []);
 
   const getStatusBadge = (status) => {
     const colorScheme = {
@@ -83,6 +68,26 @@ export default function AdminJobs() {
     };
     return <Badge colorScheme={colorScheme[status] || "gray"}>{label[status] || status}</Badge>;
   };
+
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" h="70vh">
+        <Spinner size="xl" color="blue.500" thickness="4px" />
+        <Text ml={4} fontSize="lg">
+          Loyihalar yuklanmoqda...
+        </Text>
+      </Flex>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert status="error" borderRadius="lg" my={8}>
+        <AlertIcon />
+        <Text>{error}</Text>
+      </Alert>
+    );
+  }
 
   return (
     <Box>
@@ -143,16 +148,16 @@ export default function AdminJobs() {
                 </Td>
                 <Td>
                   <Flex align="center" gap={2}>
-                    <Avatar name={job.client} size="sm" />
-                    <Text>{job.client}</Text>
+                    <Avatar name={job.client_name} size="sm" />
+                    <Text>{job.client_name}</Text>
                   </Flex>
                 </Td>
                 <Td fontWeight="semibold">{job.budget}</Td>
                 <Td>
-                  <Badge colorScheme="blue">{job.proposals} ta taklif</Badge>
+                  <Badge colorScheme="blue">{job.proposals || "Noma'lum"} ta taklif</Badge>
                 </Td>
                 <Td>{getStatusBadge(job.status)}</Td>
-                <Td>{job.createdAt}</Td>
+                <Td>{new Date(job.created_at).toLocaleDateString()}</Td>
                 <Td>
                   <HStack spacing={2}>
                     <Link to={`/admin/jobs/${job.id}`}>
