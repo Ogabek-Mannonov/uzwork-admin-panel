@@ -35,35 +35,30 @@ export default function AdminJobs() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedBoost, setSelectedBoost] = useState("all");
 
-  // Sana vaqtni xavfsiz va chiroyli formatlash funksiyasi
-  const formatDate = (value) => {
-    if (!value) return "—";
+  // UzWork loyihasiga maxsus sana formatlash
+  const formatCreatedAt = (dateStr) => {
+    if (!dateStr || typeof dateStr !== "string") return "—";
 
-    const str = String(value).trim();
+    // 2026 M01 13 15:28 shaklini aniqlash
+    const match = dateStr.match(/^(\d{4})\s*M?0?(\d{1,2})\s*(\d{1,2})\s*(\d{2}:\d{2})$/);
 
-    // Agar sana allaqachon yaxshi formatda bo'lsa
-    const isoRegex = /^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}/;
-    if (isoRegex.test(str)) {
-      try {
-        return new Date(str).toLocaleString("uz-UZ", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        });
-      } catch {}
+    if (match) {
+      const [, year, monthStr, day, time] = match;
+      const month = parseInt(monthStr, 10);
+
+      const months = [
+        "yanvar", "fevral", "mart", "aprel", "may", "iyun",
+        "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr"
+      ];
+
+      const monthName = months[month - 1] || "noma'lum oy";
+
+      return `${parseInt(day, 10)} ${monthName} ${year}, ${time}`;
     }
 
-    // "M01", "MOI" kabi xatolarni tuzatish
-    const cleaned = str
-      .replace(/MOI?/gi, "01")
-      .replace(/M(\d{1,2})/g, (m, d) => d.padStart(2, "0"))
-      .replace(/(\d{4})\s*([01]\d)\s*(\d{1,2})/, "$1-$2-$3");
-
+    // Agar boshqa format bo'lsa (masalan ISO yoki boshqa)
     try {
-      const date = new Date(cleaned);
+      const date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
         return date.toLocaleString("uz-UZ", {
           year: "numeric",
@@ -74,10 +69,10 @@ export default function AdminJobs() {
           hour12: false,
         });
       }
-    } catch {error}
+    } catch {}
 
-    // Agar hech narsa ishlamasa → xom qiymatni chiroyli qilamiz
-    return str.replace("T", " ").replace(/\.\d+Z?$/, "").slice(0, 19) || "—";
+    // Hech narsa ishlamasa — xom qiymatni biroz tozalab qaytarish
+    return dateStr.replace("T", " ").replace(/\.\d+Z?$/, "").slice(0, 19) || "—";
   };
 
   useEffect(() => {
@@ -100,7 +95,6 @@ export default function AdminJobs() {
     fetchJobs();
   }, []);
 
-  // Real vaqtda filtr
   useEffect(() => {
     let result = [...jobs];
 
@@ -243,7 +237,7 @@ export default function AdminJobs() {
                   </Td>
                   <Td>{getStatusBadge(job.status)}</Td>
                   <Td fontSize="sm" whiteSpace="nowrap">
-                    {formatDate(job.created_at)}
+                    {formatCreatedAt(job.created_at)}
                   </Td>
                   <Td>
                     <HStack spacing={1}>
