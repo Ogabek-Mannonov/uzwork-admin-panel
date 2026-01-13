@@ -1,5 +1,5 @@
 // src/pages/admin/JobDetail.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Heading,
@@ -26,32 +26,60 @@ import {
   Tr,
   Th,
   Td,
+  Spinner,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
 import { ArrowLeft, Star, Edit2, Trash2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import api from "../../lib/api";
 
 export default function JobDetail() {
   const { jobId } = useParams();
+  const [job, setJob] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock data – keyin backend dan olamiz
-  const job = {
-    id: jobId || "1",
-    title: "React JS da responsiv web sayt ishlab chiqish",
-    client: { name: "Kamola Company", username: "kamola_client", rating: 4.9 },
-    description: "Zamonaviy, responsiv landing page va admin panel kerak. React + Tailwind CSS ishlatiladi. API integratsiya va authentication bo‘lishi kerak. Muddat 2 hafta.",
-    budget: "5,000,000 so‘m",
-    status: "open",
-    boosted: true,
-    proposalsCount: 12,
-    createdAt: "2026-01-01",
-    deadline: "2026-01-15",
-    skills: ["React", "Tailwind CSS", "Node.js", "Authentication", "Responsive Design"],
-    proposals: [
-      { freelancer: "Ogabek Dev", price: "4,800,000 so‘m", duration: "10 kun" },
-      { freelancer: "Ali Pro", price: "5,200,000 so‘m", duration: "12 kun" },
-      { freelancer: "Sardor Designer", price: "4,500,000 so‘m", duration: "8 kun" },
-    ],
-  };
+  useEffect(() => {
+    const fetchJobDetail = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Real backenddan loyiha tafsilotlarini olamiz
+        const res = await api(`/admin/jobs/${jobId}`);
+
+        setJob(res.data.job || null);
+      } catch (err) {
+        console.error("Loyiha tafsilotlarini olishda xato:", err);
+        setError("Loyiha ma'lumotlarini yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (jobId) fetchJobDetail();
+  }, [jobId]);
+
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" h="70vh">
+        <Spinner size="xl" color="blue.500" thickness="4px" />
+        <Text ml={4} fontSize="lg">
+          Loyiha tafsilotlari yuklanmoqda...
+        </Text>
+      </Flex>
+    );
+  }
+
+  if (error || !job) {
+    return (
+      <Alert status="error" borderRadius="lg" my={8}>
+        <AlertIcon />
+        <Text>{error || "Loyiha topilmadi."}</Text>
+      </Alert>
+    );
+  }
 
   const getStatusBadge = (status) => {
     const colorScheme = {
@@ -89,7 +117,7 @@ export default function JobDetail() {
             <Box>
               <Heading size="lg">{job.title}</Heading>
               <Flex align="center" gap={4} mt={3}>
-                {job.boosted && (
+                {job.is_boosted && (
                   <Badge colorScheme="yellow">
                     <HStack spacing={1}>
                       <Star size={16} />
@@ -124,11 +152,11 @@ export default function JobDetail() {
               <Box>
                 <Text fontWeight="medium" color="gray.600">Client</Text>
                 <Flex align="center" gap={3} mt={1}>
-                  <Avatar name={job.client.name} size="md" />
+                  <Avatar name={job.client_name} size="md" />
                   <Box>
-                    <Text fontWeight="semibold">{job.client.name}</Text>
-                    <Text fontSize="sm" color="gray.600">@{job.client.username}</Text>
-                    <Text fontSize="sm">Rating: {job.client.rating} ⭐</Text>
+                    <Text fontWeight="semibold">{job.client_name}</Text>
+                    <Text fontSize="sm" color="gray.600">@{job.client_username}</Text>
+                    {/* Agar rating bo‘lsa qo‘shing */}
                   </Box>
                 </Flex>
               </Box>
@@ -140,31 +168,31 @@ export default function JobDetail() {
 
               <Box>
                 <Text fontWeight="medium" color="gray.600">Muddat</Text>
-                <Text mt={1}>{job.deadline}</Text>
+                <Text mt={1}>{job.deadline ? new Date(job.deadline).toLocaleDateString() : "Belgilanmagan"}</Text>
               </Box>
             </VStack>
 
             <VStack align="stretch" spacing={4}>
               <Box>
                 <Text fontWeight="medium" color="gray.600">Yaratilgan sana</Text>
-                <Text mt={1}>{job.createdAt}</Text>
+                <Text mt={1}>{new Date(job.created_at).toLocaleDateString()}</Text>
               </Box>
 
               <Box>
                 <Text fontWeight="medium" color="gray.600">Takliflar soni</Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>{job.proposalsCount} ta</Text>
+                <Text fontSize="xl" fontWeight="bold" mt={1}>{job.proposals_count || 0} ta</Text>
               </Box>
 
               <Box>
                 <Text fontWeight="medium" color="gray.600">Kerakli skillar</Text>
                 <Wrap mt={2}>
-                  {job.skills.map((skill) => (
+                  {job.required_skills?.map((skill) => (
                     <WrapItem key={skill}>
                       <Tag size="lg" colorScheme="blue" variant="subtle">
                         <TagLabel>{skill}</TagLabel>
                       </Tag>
                     </WrapItem>
-                  ))}
+                  )) || <Text color="gray.500">Skillar kiritilmagan</Text>}
                 </Wrap>
               </Box>
             </VStack>
@@ -178,9 +206,9 @@ export default function JobDetail() {
           </Box>
 
           {/* Takliflar table */}
-          {job.proposals.length > 0 && (
+          {job.proposals && job.proposals.length > 0 && (
             <Box mt={8}>
-              <Heading size="md" mb={4}>Takliflar ({job.proposalsCount})</Heading>
+              <Heading size="md" mb={4}>Takliflar ({job.proposals.length})</Heading>
               <Table variant="simple">
                 <Thead>
                   <Tr>
@@ -194,8 +222,8 @@ export default function JobDetail() {
                   {job.proposals.map((p, index) => (
                     <Tr key={index}>
                       <Td fontWeight="medium">{p.freelancer}</Td>
-                      <Td fontWeight="semibold">{p.price}</Td>
-                      <Td>{p.duration}</Td>
+                      <Td fontWeight="semibold">{p.proposed_price}</Td>
+                      <Td>{p.proposed_duration}</Td>
                       <Td>
                         <Button size="sm" colorScheme="blue" variant="ghost">
                           Ko‘rish
