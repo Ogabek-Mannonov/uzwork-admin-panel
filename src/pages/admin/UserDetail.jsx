@@ -1,5 +1,5 @@
 // src/pages/admin/UserDetail.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Heading,
@@ -23,35 +23,60 @@ import {
   Td,
   Button,
   IconButton,
+  Spinner,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
 import { ArrowLeft, Mail, Phone, Shield, Ban, CheckCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import api from "../../lib/api";
 
 export default function UserDetail() {
   const { userId } = useParams();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock data – keyin backend dan olamiz
-  const user = {
-    id: userId || "1",
-    name: "Ogabek Dev",
-    username: "ogabek_dev",
-    email: "ogabek@example.com",
-    phone: "+998901234567",
-    role: "freelancer",
-    isVerified: true,
-    isPremium: false,
-    balanceUZS: "2,500,000 so‘m",
-    balanceUSD: "$150",
-    rating: 4.8,
-    completedJobs: 45,
-    joinedAt: "2025-06-15",
-    lastActive: "5 daqiqa oldin",
-    status: "active", // active, blocked
-    recentJobs: [
-      { title: "React JS sayt", budget: "5,000,000 so‘m", status: "completed" },
-      { title: "Flutter ilova", budget: "15,000,000 so‘m", status: "in_progress" },
-    ],
-  };
+  useEffect(() => {
+    const fetchUserDetail = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Real backenddan foydalanuvchi tafsilotlarini olamiz
+        const res = await api(`/admin/users/${userId}`);
+
+        setUser(res.data.user || null);
+      } catch (err) {
+        console.error("Foydalanuvchi tafsilotlarini olishda xato:", err);
+        setError("Foydalanuvchi ma'lumotlarini yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userId) fetchUserDetail();
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" h="70vh">
+        <Spinner size="xl" color="blue.500" thickness="4px" />
+        <Text ml={4} fontSize="lg">
+          Foydalanuvchi tafsilotlari yuklanmoqda...
+        </Text>
+      </Flex>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <Alert status="error" borderRadius="lg" my={8}>
+        <AlertIcon />
+        <Text>{error || "Foydalanuvchi topilmadi."}</Text>
+      </Alert>
+    );
+  }
 
   const getRoleBadge = (role) => {
     const color = role === "admin" ? "purple" : role === "freelancer" ? "blue" : "green";
@@ -81,15 +106,15 @@ export default function UserDetail() {
         <CardHeader>
           <Flex justify="space-between" align="center">
             <Flex align="center" gap={4}>
-              <Avatar name={user.name} size="xl" />
+              <Avatar name={`${user.first_name} ${user.last_name}`} size="xl" />
               <Box>
-                <Heading size="lg">{user.name}</Heading>
+                <Heading size="lg">{user.first_name} {user.last_name}</Heading>
                 <Flex align="center" gap={4} mt={2}>
                   <Text color="gray.600">@{user.username}</Text>
                   {getRoleBadge(user.role)}
-                  {getStatusBadge(user.status)}
-                  {user.isVerified && <Badge colorScheme="green"><HStack spacing={1}><Shield size={14} /><Text>Tasdiqlangan</Text></HStack></Badge>}
-                  {user.isPremium && <Badge colorScheme="yellow">Premium</Badge>}
+                  {getStatusBadge(user.status || "active")}
+                  {user.is_verified && <Badge colorScheme="green"><HStack spacing={1}><Shield size={14} /><Text>Tasdiqlangan</Text></HStack></Badge>}
+                  {user.is_premium && <Badge colorScheme="yellow">Premium</Badge>}
                 </Flex>
               </Box>
             </Flex>
@@ -121,7 +146,7 @@ export default function UserDetail() {
                 <Text fontWeight="medium" color="gray.600">Telefon</Text>
                 <Flex align="center" gap={2} mt={1}>
                   <Phone size={16} />
-                  <Text>{user.phone}</Text>
+                  <Text>{user.phone || "Kiritilmagan"}</Text>
                 </Flex>
               </Box>
             </VStack>
@@ -129,27 +154,27 @@ export default function UserDetail() {
             <VStack align="stretch" spacing={4}>
               <Box>
                 <Text fontWeight="medium" color="gray.600">Balans</Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>{user.balanceUZS}</Text>
-                <Text fontSize="sm" color="gray.600">{user.balanceUSD}</Text>
+                <Text fontSize="xl" fontWeight="bold" mt={1}>{user.balance_uzs || "0 so‘m"}</Text>
+                <Text fontSize="sm" color="gray.600">{user.balance_usd || "$0"}</Text>
               </Box>
               <Box>
                 <Text fontWeight="medium" color="gray.600">Rating</Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>{user.rating} ⭐</Text>
+                <Text fontSize="xl" fontWeight="bold" mt={1}>{user.rating || "Noma'lum"} ⭐</Text>
               </Box>
             </VStack>
 
             <VStack align="stretch" spacing={4}>
               <Box>
                 <Text fontWeight="medium" color="gray.600">Ro‘yxatdan o‘tgan</Text>
-                <Text mt={1}>{user.joinedAt}</Text>
+                <Text mt={1}>{new Date(user.created_at).toLocaleDateString()}</Text>
               </Box>
               <Box>
                 <Text fontWeight="medium" color="gray.600">Oxirgi faollik</Text>
-                <Text mt={1}>{user.lastActive}</Text>
+                <Text mt={1}>Noma'lum (keyin qo'shiladi)</Text>
               </Box>
               <Box>
                 <Text fontWeight="medium" color="gray.600">Tugallangan loyihalar</Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>{user.completedJobs}</Text>
+                <Text fontSize="xl" fontWeight="bold" mt={1}>{user.completed_jobs || 0}</Text>
               </Box>
             </VStack>
           </SimpleGrid>
@@ -162,24 +187,28 @@ export default function UserDetail() {
           <Heading size="md">So‘nggi loyihalar</Heading>
         </CardHeader>
         <CardBody>
-          <Table variant="simple">
-            <Thead>
-              <Tr>
-                <Th>Loyiha nomi</Th>
-                <Th>Byudjet</Th>
-                <Th>Status</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {user.recentJobs.map((job, index) => (
-                <Tr key={index}>
-                  <Td>{job.title}</Td>
-                  <Td fontWeight="semibold">{job.budget}</Td>
-                  <Td>{getStatusBadge(job.status)}</Td>
+          {user.recent_jobs && user.recent_jobs.length > 0 ? (
+            <Table variant="simple">
+              <Thead>
+                <Tr>
+                  <Th>Loyiha nomi</Th>
+                  <Th>Byudjet</Th>
+                  <Th>Status</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
+              </Thead>
+              <Tbody>
+                {user.recent_jobs.map((job, index) => (
+                  <Tr key={index}>
+                    <Td>{job.title}</Td>
+                    <Td fontWeight="semibold">{job.budget}</Td>
+                    <Td>{getStatusBadge(job.status)}</Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          ) : (
+            <Text color="gray.500">Hozircha loyihalar yo‘q</Text>
+          )}
         </CardBody>
       </Card>
     </Box>
