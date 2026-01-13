@@ -35,37 +35,49 @@ export default function AdminJobs() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedBoost, setSelectedBoost] = useState("all");
 
-  // Sana va vaqtni xavfsiz formatlash funksiyasi
-  const formatDate = (dateString) => {
-    if (!dateString) return "—";
+  // Sana vaqtni xavfsiz va chiroyli formatlash funksiyasi
+  const formatDate = (value) => {
+    if (!value) return "—";
+
+    const str = String(value).trim();
+
+    // Agar sana allaqachon yaxshi formatda bo'lsa
+    const isoRegex = /^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}/;
+    if (isoRegex.test(str)) {
+      try {
+        return new Date(str).toLocaleString("uz-UZ", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+      } catch {}
+    }
+
+    // "M01", "MOI" kabi xatolarni tuzatish
+    const cleaned = str
+      .replace(/MOI?/gi, "01")
+      .replace(/M(\d{1,2})/g, (m, d) => d.padStart(2, "0"))
+      .replace(/(\d{4})\s*([01]\d)\s*(\d{1,2})/, "$1-$2-$3");
 
     try {
-      // "M01", "MOI" kabi xatolarni tozalash
-      let cleaned = dateString
-        .replace(/MOI?/gi, "01")
-        .replace(/M0?(\d+)/g, (match, p1) => p1.padStart(2, "0"));
-
       const date = new Date(cleaned);
-
-      if (isNaN(date.getTime())) {
-        // Agar hali ham xato bo'lsa, xom qiymatni biroz chiroyli qilamiz
-        return cleaned
-          .replace("T", " ")
-          .replace(/\.\d{3}Z?$/, "")
-          .slice(0, 16);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleString("uz-UZ", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
       }
+    } catch {error}
 
-      return date.toLocaleString("uz-UZ", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-    } catch (err) {
-      return dateString.replace("T", " ").slice(0, 16) || "—";
-    }
+    // Agar hech narsa ishlamasa → xom qiymatni chiroyli qilamiz
+    return str.replace("T", " ").replace(/\.\d+Z?$/, "").slice(0, 19) || "—";
   };
 
   useEffect(() => {
@@ -157,7 +169,6 @@ export default function AdminJobs() {
     <Box p={6}>
       <Heading mb={6}>Barcha loyihalar (UzWork)</Heading>
 
-      {/* Filterlar */}
       <Flex mb={6} gap={4} wrap="wrap">
         <InputGroup maxW="400px">
           <InputLeftElement pointerEvents="none">
@@ -193,7 +204,6 @@ export default function AdminJobs() {
         </Select>
       </Flex>
 
-      {/* Jadval */}
       <Box overflowX="auto">
         <Table variant="simple" size="md">
           <Thead bg="gray.50">
@@ -213,11 +223,11 @@ export default function AdminJobs() {
                 <Tr key={job.id}>
                   <Td>
                     {job.is_boosted && <StarIcon color="yellow.400" mr={2} />}
-                    {job.title}
+                    {job.title || "—"}
                   </Td>
                   <Td>
                     <HStack>
-                      <Avatar name={job.client_name || "M"} size="xs" />
+                      <Avatar name={job.client_name || "?"} size="xs" />
                       <Text>{job.client_name || "Noma'lum"}</Text>
                     </HStack>
                   </Td>
