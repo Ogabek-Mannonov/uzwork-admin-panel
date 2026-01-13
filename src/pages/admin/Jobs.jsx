@@ -203,9 +203,9 @@ export default function AdminJobs() {
                   <Td>{getStatusBadge(job.status)}</Td>
                   <Td>
                     {new Date(job.created_at).toLocaleString("uz-UZ", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
+                      year: "numeric.",
+                      month: "long.",
+                      day: "numeric.",
                       hour: "numeric",
                       minute: "numeric",
                     })}
