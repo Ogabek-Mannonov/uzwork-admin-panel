@@ -35,44 +35,32 @@ export default function AdminJobs() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedBoost, setSelectedBoost] = useState("all");
 
-  // UzWork loyihasiga maxsus sana formatlash
+  // Sana formatlash: 2026 M01 13 15:28 → 13.01.2026
   const formatCreatedAt = (dateStr) => {
     if (!dateStr || typeof dateStr !== "string") return "—";
 
-    // 2026 M01 13 15:28 shaklini aniqlash
-    const match = dateStr.match(/^(\d{4})\s*M?0?(\d{1,2})\s*(\d{1,2})\s*(\d{2}:\d{2})$/);
+    // 2026 M01 13 15:28 yoki shunga o'xshash formatlarni aniqlash
+    const match = dateStr.match(/^(\d{4})\s*M?0?(\d{1,2})\s*(\d{1,2})/);
 
     if (match) {
-      const [, year, monthStr, day, time] = match;
-      const month = parseInt(monthStr, 10);
-
-      const months = [
-        "yanvar", "fevral", "mart", "aprel", "may", "iyun",
-        "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr"
-      ];
-
-      const monthName = months[month - 1] || "noma'lum oy";
-
-      return `${parseInt(day, 10)} ${monthName} ${year}, ${time}`;
+      const [, year, month, day] = match;
+      return `${day.padStart(2, "0")}.${month.padStart(2, "0")}.${year}`;
+      // Natija: 13.01.2026
     }
 
-    // Agar boshqa format bo'lsa (masalan ISO yoki boshqa)
-    try {
-      const date = new Date(dateStr);
-      if (!isNaN(date.getTime())) {
-        return date.toLocaleString("uz-UZ", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        });
-      }
-    } catch {}
+    // Agar boshqa format bo'lsa, birinchi 10 ta belgini olib, nuqta bilan ajratamiz
+    const cleaned = dateStr
+      .replace(/\D/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
 
-    // Hech narsa ishlamasa — xom qiymatni biroz tozalab qaytarish
-    return dateStr.replace("T", " ").replace(/\.\d+Z?$/, "").slice(0, 19) || "—";
+    if (cleaned.length >= 3) {
+      const [y, m, d] = cleaned;
+      return `${d.padStart(2, "0")}.${m.padStart(2, "0")}.${y}`;
+    }
+
+    return dateStr.slice(0, 10).replace(/-/g, ".") || "—";
   };
 
   useEffect(() => {
