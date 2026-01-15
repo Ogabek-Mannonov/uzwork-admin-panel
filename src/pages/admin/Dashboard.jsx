@@ -33,7 +33,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
-import api from "../../lib/api"; // real backend so‘rovi uchun
+import api from "../../lib/api";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
@@ -48,12 +48,14 @@ export default function AdminDashboard() {
         setLoading(true);
         setError(null);
 
-        // Real backenddan statistika olamiz
         const res = await api("/admin/dashboard");
 
-        setStats(res.data.stats || {});
+        // Backenddan kelgan ma'lumotlarni to'g'ri o'rnatamiz
+        setStats(res.data.stats);
         setRecentActivity(res.data.recentActivity || []);
-        setQuickStats(res.data.quickStats || {});
+        setQuickStats(res.data.quickStats);
+
+        console.log("Backenddan kelgan data:", res.data); // test uchun console ga chiqaramiz
       } catch (err) {
         console.error("Dashboard ma'lumotlari olishda xato:", err);
         setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
@@ -85,30 +87,8 @@ export default function AdminDashboard() {
     );
   }
 
-  // Agar backenddan ma'lumot kelmasa – fallback demo qiymatlar
-  const fallbackStats = stats || {
-    totalUsers: "8,542",
-    activeJobs: "126",
-    totalRevenue: "1.24 mlrd so'm",
-    platformFee: "248 mln so'm",
-    usersGrowth: "+12.5%",
-    jobsGrowth: "+8.3%",
-    revenueGrowth: "+23.1%",
-    feeGrowth: "+18.7%",
-  };
-
-  const fallbackRecentActivity = recentActivity.length > 0 ? recentActivity : [
-    { name: "Ogabek Developer", action: "Yangi loyiha joylashtirdi", time: "5 daqiqa oldin" },
-    { name: "Ali Freelancer", action: "Taklif yubordi", time: "12 daqiqa oldin" },
-    { name: "Kamola Client", action: "To'lov amalga oshirdi", time: "25 daqiqa oldin" },
-  ];
-
-  const fallbackQuickStats = quickStats || {
-    pendingMilestones: 24,
-    completedThisMonth: 67,
-    openDisputes: 5,
-  };
-
+  // Backenddan ma'lumot kelgan bo'lsa - faqat uni ishlatamiz
+  // Fallback faqat xato bo'lsa ishlaydi
   return (
     <Box>
       <Heading size="xl" mb={8}>
@@ -123,11 +103,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Jami foydalanuvchilar</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {fallbackStats.totalUsers}
+                  {stats?.totalUsers || "0"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {fallbackStats.usersGrowth}
+                  {stats?.usersGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -140,11 +120,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Faol loyihalar</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {fallbackStats.activeJobs}
+                  {stats?.activeJobs || "0"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {fallbackStats.jobsGrowth}
+                  {stats?.jobsGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -157,11 +137,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Umumiy daromad</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {fallbackStats.totalRevenue}
+                  {stats?.totalRevenue || "0 so‘m"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {fallbackStats.revenueGrowth}
+                  {stats?.revenueGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -174,11 +154,11 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Platforma haqi</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {fallbackStats.platformFee}
+                  {stats?.platformFee || "0 so‘m"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  {fallbackStats.feeGrowth}
+                  {stats?.feeGrowth || "+0%"}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -194,16 +174,20 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardBody>
             <VStack align="stretch" spacing={4}>
-              {fallbackRecentActivity.map((activity, index) => (
-                <Flex key={index} align="center" gap={4}>
-                  <Avatar name={activity.name} size="md" />
-                  <Box flex="1">
-                    <Text fontWeight="medium">{activity.name}</Text>
-                    <Text fontSize="sm" color="gray.600">{activity.action}</Text>
-                  </Box>
-                  <Text fontSize="sm" color="gray.500">{activity.time}</Text>
-                </Flex>
-              ))}
+              {recentActivity.length > 0 ? (
+                recentActivity.map((activity, index) => (
+                  <Flex key={index} align="center" gap={4}>
+                    <Avatar name={activity.name} size="md" />
+                    <Box flex="1">
+                      <Text fontWeight="medium">{activity.name}</Text>
+                      <Text fontSize="sm" color="gray.600">{activity.action}</Text>
+                    </Box>
+                    <Text fontSize="sm" color="gray.500">{activity.time}</Text>
+                  </Flex>
+                ))
+              ) : (
+                <Text color="gray.500">Hozircha faollik yo‘q</Text>
+              )}
             </VStack>
           </CardBody>
         </Card>
@@ -221,7 +205,7 @@ export default function AdminDashboard() {
                   <Text>Kutilayotgan milestone lar</Text>
                 </Flex>
                 <Badge colorScheme="orange" fontSize="lg">
-                  {fallbackQuickStats.pendingMilestones}
+                  {quickStats?.pendingMilestones || 0}
                 </Badge>
               </Flex>
 
@@ -231,7 +215,7 @@ export default function AdminDashboard() {
                   <Text>Tugallangan loyihalar (bu oy)</Text>
                 </Flex>
                 <Badge colorScheme="green" fontSize="lg">
-                  {fallbackQuickStats.completedThisMonth}
+                  {quickStats?.completedThisMonth || 0}
                 </Badge>
               </Flex>
 
@@ -241,7 +225,7 @@ export default function AdminDashboard() {
                   <Text>Ochiq nizolar</Text>
                 </Flex>
                 <Badge colorScheme="red" fontSize="lg">
-                  {fallbackQuickStats.openDisputes}
+                  {quickStats?.openDisputes || 0}
                 </Badge>
               </Flex>
             </VStack>
