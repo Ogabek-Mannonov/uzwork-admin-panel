@@ -239,17 +239,23 @@ export default function JobDetail() {
                       <Td>
                         <Badge colorScheme={
                           p.status === "pending" ? "yellow" :
-                          p.status === "accepted" ? "green" :
-                          p.status === "rejected" ? "red" : "gray"
+                            p.status === "accepted" ? "green" :
+                              p.status === "rejected" ? "red" : "gray"
                         }>
                           {p.status === "pending" ? "Kutilmoqda" :
-                           p.status === "accepted" ? "Qabul qilingan" :
-                           p.status === "rejected" ? "Rad etilgan" : p.status}
+                            p.status === "accepted" ? "Qabul qilingan" :
+                              p.status === "rejected" ? "Rad etilgan" : p.status}
                         </Badge>
                       </Td>
                       <Td>
-                        <Button size="sm" colorScheme="blue" variant="ghost">
-                          Ko‘rish
+                        <Button
+                          as={Link}
+                          to={`/admin/users/${p.freelancer_id}`}  // ← bu yerda UserDetail.jsx ga yo‘naltirish
+                          size="sm"
+                          colorScheme="blue"
+                          variant="outline"
+                        >
+                          Ko'rish
                         </Button>
                       </Td>
                     </Tr>
