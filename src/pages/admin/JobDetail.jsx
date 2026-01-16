@@ -250,11 +250,11 @@ export default function JobDetail() {
                       <Td>
                         <Button
                           as={Link}
-                          to={`/admin/users/${p.user.id}`}
                           size="sm"
                           colorScheme="blue"
                           variant="outline"
                         >
+                          <Link to={`/admin/users/${p.user.id}`}></Link>
                           Ko'rish
                         </Button>
                       </Td>
