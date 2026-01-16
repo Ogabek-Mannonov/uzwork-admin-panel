@@ -250,7 +250,7 @@ export default function JobDetail() {
                       <Td>
                         <Button
                           as={Link}
-                          to={`/admin/users/${p.freelancer_id}`}  // ← bu yerda UserDetail.jsx ga yo‘naltirish
+                          to={`/admin/users/${p.user.id}`}
                           size="sm"
                           colorScheme="blue"
                           variant="outline"
