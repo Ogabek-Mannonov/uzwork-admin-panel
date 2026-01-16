@@ -137,7 +137,7 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Umumiy daromad</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.totalRevenue || "0 so‘m"}
+                  {stats?.totalRevenue || "0 so'm"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
@@ -154,7 +154,7 @@ export default function AdminDashboard() {
               <Stat>
                 <StatLabel color="gray.600">Platforma haqi</StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.platformFee || "0 so‘m"}
+                  {stats?.platformFee || "0 so'm"}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
@@ -176,17 +176,22 @@ export default function AdminDashboard() {
             <VStack align="stretch" spacing={4}>
               {recentActivity.length > 0 ? (
                 recentActivity.map((activity, index) => (
-                  <Flex key={index} align="center" gap={4}>
+                  <Flex key={index} align="center" gap={4} p={3} bg="gray.50" borderRadius="md">
                     <Avatar name={activity.name} size="md" />
                     <Box flex="1">
                       <Text fontWeight="medium">{activity.name}</Text>
                       <Text fontSize="sm" color="gray.600">{activity.action}</Text>
                     </Box>
-                    <Text fontSize="sm" color="gray.500">{activity.time}</Text>
+                    <Text fontSize="sm" color="gray.500" whiteSpace="nowrap">
+                      {activity.time}
+                    </Text>
                   </Flex>
                 ))
               ) : (
-                <Text color="gray.500">Hozircha faollik yo‘q</Text>
+                <Flex direction="column" align="center" py={8} color="gray.500">
+                  <Text fontSize="lg" mb={2}>Hozircha faollik yo'q</Text>
+                  <Text fontSize="sm">Platformada yangi harakatlar bo'lganda bu yerda ko'rinasiz</Text>
+                </Flex>
               )}
             </VStack>
           </CardBody>
