@@ -2,7 +2,6 @@
 import { io } from "socket.io-client";
 
 // Production va development uchun avto-tanlash
-// eslint-disable-next-line no-undef
 const SOCKET_URL = "https://uzwork-backend.onrender.com";
 
 const socket = io(SOCKET_URL, {
