@@ -41,37 +41,36 @@ export default function AdminChats() {
   try {
     const res = await api("/messages");
 
-    // Backenddan qanday formatda kelayotganini moslashtiramiz
+    console.log("Backenddan kelgan to'liq response:", res.data); // ← bu muhim! Konsolda ko‘rasiz
+
+    // Har qanday formatda kelsa ham tutib olamiz
     let fetchedChats = [];
 
-    // Variant 1: { success: true, data: { chats: [...] } }
-    if (res.data?.data?.chats) {
-      fetchedChats = res.data.data.chats;
+    if (res.data?.success) {
+      // 1. { success: true, data: { chats: [...] } }
+      if (res.data.data?.chats) {
+        fetchedChats = res.data.data.chats;
+      }
+      // 2. { success: true, chats: [...] }
+      else if (res.data.chats) {
+        fetchedChats = res.data.chats;
+      }
+      // 3. { success: true, data: [...] }
+      else if (Array.isArray(res.data.data)) {
+        fetchedChats = res.data.data;
+      }
+      // 4. To‘g‘ridan array
+      else if (Array.isArray(res.data)) {
+        fetchedChats = res.data;
+      }
     }
-    // Variant 2: { success: true, chats: [...] }
-    else if (res.data?.chats) {
-      fetchedChats = res.data.chats;
-    }
-    // Variant 3: { success: true, data: [...] }
-    else if (res.data?.data && Array.isArray(res.data.data)) {
-      fetchedChats = res.data.data;
-    }
-    // Variant 4: to‘g‘ridan-to‘g‘ri array
-    else if (Array.isArray(res.data)) {
-      fetchedChats = res.data;
-    }
+
+    console.log("Parsed chats:", fetchedChats); // bu ham chiqadi
 
     setChats(fetchedChats || []);
   } catch (err) {
-    console.error("Chatlarni olishda xato:", err.response?.data || err);
-    toast({
-      title: "Xato",
-      description: "Chatlar yuklanmadi, lekin sahifa ochiq qoladi",
-      status: "warning",
-      duration: 5000,
-      isClosable: true,
-    });
-    setChats([]); // xato bo‘lsa bo‘sh ro‘yxat ko‘rsatamiz
+    console.error("API xatosi:", err.response?.data || err.message);
+    setChats([]); // xato bo‘lsa bo‘sh ko‘rsat
   } finally {
     setLoading(false);
   }

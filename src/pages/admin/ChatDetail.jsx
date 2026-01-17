@@ -1,5 +1,5 @@
 // src/pages/admin/ChatDetail.jsx
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Heading,
@@ -14,31 +14,122 @@ import {
   Input,
   InputGroup,
   InputRightElement,
-  Button,
   IconButton,
   Divider,
+  Spinner,
+  Badge,
+  useToast,
 } from "@chakra-ui/react";
-import { ArrowLeft, Send, Paperclip, AlertTriangle } from "lucide-react"; // lucide-react dan
+import { ArrowLeft, Send, Paperclip, AlertTriangle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import api from "../../lib/api";
+import socket from "../../utils/socket";
 
 export default function ChatDetail() {
   const { chatId } = useParams();
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newMessage, setNewMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef(null);
+  const toast = useToast();
 
-  // Mock data – keyin backend dan olamiz
-  const chat = {
-    id: chatId || "1",
-    jobTitle: "React JS da responsiv web sayt",
-    client: { name: "Kamola Company", username: "kamola_client" },
-    freelancer: { name: "Ogabek Dev", username: "ogabek_dev" },
-    messages: [
-      { id: 1, sender: "client", text: "Salom, loyiha haqida gaplashsak bo‘ladimi?", time: "10:00" },
-      { id: 2, sender: "freelancer", text: "Salom! Albatta, qaysi qism haqida?", time: "10:05" },
-      { id: 3, sender: "client", text: "Admin panel dizayni haqida, ko‘proq funksiyalar qo‘shmoqchiman", time: "10:10" },
-      { id: 4, sender: "freelancer", text: "Tushundim, qo‘shimcha funksiyalarni ro‘yxat qilib yuboring", time: "10:15" },
-      { id: 5, sender: "client", text: "Fayl biriktirdim, ko‘rib chiqing", file: "requirements.pdf", time: "10:20" },
-      { id: 6, sender: "freelancer", text: "Faylni ko‘rdim, 2 kun ichida yangi versiyani yuboraman", time: "10:25" },
-    ],
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  useEffect(() => {
+    socket.connect();
+    socket.emit("joinChat", chatId);
+
+    const fetchMessages = async () => {
+      try {
+        const res = await api(`/messages/${chatId}`);
+        const fetchedMessages = res.data.data.messages || [];
+        setMessages(fetchedMessages); // eski xabarlardan boshlab (ASC)
+      } catch (err) {
+        console.error("Xabarlar olishda xato:", err);
+        toast({
+          title: "Xato",
+          description: "Xabarlar yuklanmadi",
+          status: "error",
+          duration: 5000,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMessages();
+
+    // Yangi xabar kelganda
+    socket.on("newMessage", (newMsg) => {
+      if (newMsg.chat_id === chatId) {
+        setMessages((prev) => [...prev, newMsg]);
+        scrollToBottom();
+      }
+    });
+
+    // O‘qilgan yangilanishi (admin uchun)
+    socket.on("messagesRead", ({ chatId: updatedChatId }) => {
+      if (updatedChatId === chatId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            !msg.is_read && msg.sender_id !== "sizning_admin_id" 
+              ? { ...msg, is_read: true } 
+              : msg
+          )
+        );
+      }
+    });
+
+    return () => {
+      socket.off("newMessage");
+      socket.off("messagesRead");
+      socket.disconnect();
+    };
+  }, [chatId, toast]);
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim()) return;
+
+    setSending(true);
+    try {
+      const res = await api.post("/messages", {
+        chat_id: chatId,
+        message_text: newMessage,
+        type: "text",
+      });
+
+      // Localda qo‘shish
+      setMessages((prev) => [...prev, res.data.data.message]);
+      setNewMessage("");
+      scrollToBottom();
+    } catch (err) {
+      console.error("Xabar yuborish xatosi:", err);
+      toast({
+        title: "Xato",
+        description: "Xabar yuborilmadi",
+        status: "error",
+        duration: 5000,
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  if (loading) {
+    return (
+      <Flex justify="center" align="center" h="70vh">
+        <Spinner size="xl" color="blue.500" />
+        <Text ml={4}>Xabarlar yuklanmoqda...</Text>
+      </Flex>
+    );
+  }
 
   return (
     <Box h="calc(100vh - 100px)" display="flex" flexDirection="column">
@@ -51,15 +142,16 @@ export default function ChatDetail() {
                 <IconButton icon={<ArrowLeft size={20} />} colorScheme="gray" variant="ghost" />
               </Link>
               <Box>
-                <Heading size="md">{chat.jobTitle}</Heading>
+                <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
                 <Flex align="center" gap={6} mt={2}>
+                  {/* Real ma'lumot keyinroq qo‘shiladi */}
                   <Flex align="center" gap={2}>
-                    <Avatar name={chat.client.name} size="xs" />
-                    <Text fontSize="sm">{chat.client.name} (@{chat.client.username})</Text>
+                    <Avatar name="Client" size="xs" />
+                    <Text fontSize="sm">Client (@client)</Text>
                   </Flex>
                   <Flex align="center" gap={2}>
-                    <Avatar name={chat.freelancer.name} size="xs" />
-                    <Text fontSize="sm">{chat.freelancer.name} (@{chat.freelancer.username})</Text>
+                    <Avatar name="Freelancer" size="xs" />
+                    <Text fontSize="sm">Freelancer (@dev)</Text>
                   </Flex>
                 </Flex>
               </Box>
@@ -71,47 +163,74 @@ export default function ChatDetail() {
         </CardHeader>
       </Card>
 
-      {/* Messages */}
+      {/* Xabarlar */}
       <Box flex="1" overflowY="auto" p={4} bg="gray.50" borderRadius="lg">
         <VStack align="stretch" spacing={4}>
-          {chat.messages.map((msg) => (
-            <Flex
-              key={msg.id}
-              alignSelf={msg.sender === "client" ? "flex-start" : "flex-end"}
-              maxW="70%"
-              direction="column"
-            >
-              <Box
-                bg={msg.sender === "client" ? "white" : "blue.100"}
-                p={4}
-                borderRadius="lg"
-                boxShadow="md"
+          {messages.length === 0 ? (
+            <Text textAlign="center" color="gray.500" py={10}>
+              Hozircha xabarlar yo‘q
+            </Text>
+          ) : (
+            messages.map((msg) => (
+              <Flex
+                key={msg.id}
+                alignSelf={msg.sender_is_admin ? "flex-end" : "flex-start"}
+                maxW="70%"
+                direction="column"
               >
-                <Text>{msg.text}</Text>
-                {msg.file && (
-                  <HStack mt={2}>
-                    <Paperclip size={16} />
-                    <Text fontSize="sm" color="blue.600">{msg.file}</Text>
-                  </HStack>
-                )}
-              </Box>
-              <Text fontSize="xs" color="gray.500" mt={1} alignSelf={msg.sender === "client" ? "flex-start" : "flex-end"}>
-                {msg.time}
-              </Text>
-            </Flex>
-          ))}
+                <Box
+                  bg={msg.sender_is_admin ? "blue.500" : "white"}
+                  color={msg.sender_is_admin ? "white" : "black"}
+                  p={4}
+                  borderRadius="lg"
+                  boxShadow="md"
+                >
+                  <Text>{msg.content}</Text>
+                  {msg.file_url && (
+                    <HStack mt={2}>
+                      <Paperclip size={16} />
+                      <Text fontSize="sm" color="blue.600">Fayl: {msg.file_url.split('/').pop()}</Text>
+                    </HStack>
+                  )}
+                </Box>
+                <HStack mt={1} alignSelf={msg.sender_is_admin ? "flex-end" : "flex-start"}>
+                  <Text fontSize="xs" color="gray.500">
+                    {new Date(msg.created_at).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                  {msg.is_read && msg.sender_is_admin && (
+                    <Badge ml={2} colorScheme="green" fontSize="xs">
+                      O‘qildi
+                    </Badge>
+                  )}
+                </HStack>
+              </Flex>
+            ))
+          )}
+          <div ref={messagesEndRef} />
         </VStack>
       </Box>
 
-      {/* Message input */}
+      {/* Input */}
       <Card mt={4}>
         <CardBody>
           <InputGroup>
-            <Input placeholder="Xabar yozing..." />
+            <Input
+              placeholder="Xabar yozing..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && !sending && handleSendMessage()}
+              disabled={sending}
+            />
             <InputRightElement width="4.5rem">
               <HStack>
-                <IconButton icon={<Paperclip size={18} />} variant="ghost" aria-label="Fayl biriktirish" />
-                <IconButton icon={<Send size={18} />} colorScheme="blue" aria-label="Yuborish" />
+                <IconButton icon={<Paperclip size={18} />} variant="ghost" aria-label="Fayl" />
+                <IconButton
+                  icon={<Send size={18} />}
+                  colorScheme="blue"
+                  onClick={handleSendMessage}
+                  isLoading={sending}
+                  aria-label="Yuborish"
+                />
               </HStack>
             </InputRightElement>
           </InputGroup>
