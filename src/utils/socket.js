@@ -2,9 +2,8 @@
 import { io } from "socket.io-client";
 
 // Production va development uchun avto-tanlash
-const SOCKET_URL = process.env.NODE_ENV === 'production'
-  ? "https://uzwork-backend.onrender.com"  // Render.com backend URL
-  : "http://localhost:3000";               // localda ishlatish uchun
+// eslint-disable-next-line no-undef
+const SOCKET_URL = "https://uzwork-backend.onrender.com";
 
 const socket = io(SOCKET_URL, {
   withCredentials: true,
