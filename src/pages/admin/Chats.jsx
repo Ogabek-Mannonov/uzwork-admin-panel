@@ -38,23 +38,44 @@ export default function AdminChats() {
 
     // Chatlar ro‘yxatini backenddan olish
     const fetchChats = async () => {
-      try {
-        const res = await api("/messages");
-        const fetchedChats = res.data.data.chats || [];
-        setChats(fetchedChats);
-      } catch (err) {
-        console.error("Chatlarni olishda xato:", err);
-        toast({
-          title: "Xato",
-          description: "Chatlarni yuklashda muammo yuz berdi",
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+  try {
+    const res = await api("/messages");
+
+    // Backenddan qanday formatda kelayotganini moslashtiramiz
+    let fetchedChats = [];
+
+    // Variant 1: { success: true, data: { chats: [...] } }
+    if (res.data?.data?.chats) {
+      fetchedChats = res.data.data.chats;
+    }
+    // Variant 2: { success: true, chats: [...] }
+    else if (res.data?.chats) {
+      fetchedChats = res.data.chats;
+    }
+    // Variant 3: { success: true, data: [...] }
+    else if (res.data?.data && Array.isArray(res.data.data)) {
+      fetchedChats = res.data.data;
+    }
+    // Variant 4: to‘g‘ridan-to‘g‘ri array
+    else if (Array.isArray(res.data)) {
+      fetchedChats = res.data;
+    }
+
+    setChats(fetchedChats || []);
+  } catch (err) {
+    console.error("Chatlarni olishda xato:", err.response?.data || err);
+    toast({
+      title: "Xato",
+      description: "Chatlar yuklanmadi, lekin sahifa ochiq qoladi",
+      status: "warning",
+      duration: 5000,
+      isClosable: true,
+    });
+    setChats([]); // xato bo‘lsa bo‘sh ro‘yxat ko‘rsatamiz
+  } finally {
+    setLoading(false);
+  }
+};
 
     fetchChats();
 
