@@ -1,5 +1,4 @@
-// src/pages/admin/Chats.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Heading,
@@ -18,66 +17,82 @@ import {
   InputLeftElement,
   HStack,
   IconButton,
+  Spinner,
 } from "@chakra-ui/react";
-import { SearchIcon } from "@chakra-ui/icons";
-import { MessageSquare } from "lucide-react";  // lucide-react dan
+import { SearchIcon, MessageSquare } from "lucide-react";
 import { Link } from "react-router-dom";
+import api from "../../lib/api";
+import socket from "../../utils/socket";
 
 export default function AdminChats() {
-  // Mock data – keyin backend dan olamiz
-  const chats = [
-    {
-      id: 1,
-      jobTitle: "React JS sayt",
-      client: "Kamola Company",
-      freelancer: "Ogabek Dev",
-      lastMessage: "Admin panel ishlayapti, test qiling",
-      lastMessageTime: "5 daqiqa oldin",
-      unreadCount: 3,
-    },
-    {
-      id: 2,
-      jobTitle: "Logo dizayn",
-      client: "Shaxsiy",
-      freelancer: "Sardor Designer",
-      lastMessage: "Yangi variantni yubordim",
-      lastMessageTime: "1 soat oldin",
-      unreadCount: 0,
-    },
-    {
-      id: 3,
-      jobTitle: "Flutter mobil ilova",
-      client: "Tech Startup",
-      freelancer: "Ali Pro",
-      lastMessage: "Ilova App Store ga yuklandi",
-      lastMessageTime: "2 kun oldin",
-      unreadCount: 0,
-    },
-  ];
+  const [chats, setChats] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    // Socket ulanish
+    socket.connect();
+
+    // Real ma’lumotlarni olish
+    const fetchChats = async () => {
+      try {
+        const res = await api("/messages"); // getChats endpointi
+        setChats(res.data.data.chats || []);
+      } catch (err) {
+        console.error("Chatlarni olishda xato:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChats();
+
+    // Yangi xabar kelganda yangilash
+    socket.on("newMessage", (message) => {
+      // Yangi xabar kelgan chatni yangilash
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.partner_id === message.sender_id || chat.partner_id === message.receiver_id
+            ? { ...chat, last_message: message.message_text, unread_count: chat.unread_count + 1 }
+            : chat
+        )
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const filteredChats = chats.filter((chat) =>
+    chat.partner?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    chat.partner?.last_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) return <Spinner size="xl" />;
 
   return (
     <Box>
-      <Heading size="xl" mb={8}>
-        Chatlar
-      </Heading>
+      <Heading size="xl" mb={8}>Chatlar</Heading>
 
-      {/* Qidiruv */}
       <HStack mb={6}>
         <InputGroup maxW="500px">
           <InputLeftElement>
             <SearchIcon color="gray.300" />
           </InputLeftElement>
-          <Input placeholder="Loyiha, client yoki freelancer bo‘yicha qidirish" />
+          <Input
+            placeholder="Foydalanuvchi yoki loyiha bo‘yicha qidirish"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </InputGroup>
       </HStack>
 
-      {/* Table */}
       <Box overflowX="auto">
-        <Table variant="simple" size="lg">
+        <Table variant="simple">
           <Thead>
-            <Tr bg="gray.50">
-              <Th>Loyiha</Th>
-              <Th>Tomoni</Th>
+            <Tr>
+              <Th>Foydalanuvchi</Th>
               <Th>Oxirgi xabar</Th>
               <Th>Vaqt</Th>
               <Th>O‘qilmagan</Th>
@@ -85,46 +100,39 @@ export default function AdminChats() {
             </Tr>
           </Thead>
           <Tbody>
-            {chats.map((chat) => (
-              <Tr key={chat.id} _hover={{ bg: "gray.50" }}>
+            {filteredChats.map((chat) => (
+              <Tr key={chat.partner_id}>
                 <Td>
-                  <Text fontWeight="medium">{chat.jobTitle}</Text>
+                  <HStack>
+                    <Avatar name={`${chat.partner.first_name} ${chat.partner.last_name}`} size="md" />
+                    <Box>
+                      <Text fontWeight="medium">
+                        {chat.partner.first_name} {chat.partner.last_name}
+                      </Text>
+                      <Text fontSize="sm" color="gray.600">
+                        {chat.partner.role}
+                      </Text>
+                    </Box>
+                  </HStack>
                 </Td>
+                <Td>{chat.last_message || "Hech qanday xabar yo‘q"}</Td>
+                <Td>{chat.last_message_at ? new Date(chat.last_message_at).toLocaleString() : "—"}</Td>
                 <Td>
-                  <Flex direction="column" gap={2}>
-                    <Flex align="center" gap={2}>
-                      <Avatar name={chat.client} size="xs" />
-                      <Text fontSize="sm">{chat.client}</Text>
-                    </Flex>
-                    <Flex align="center" gap={2}>
-                      <Avatar name={chat.freelancer} size="xs" />
-                      <Text fontSize="sm">{chat.freelancer}</Text>
-                    </Flex>
-                  </Flex>
-                </Td>
-                <Td maxW="300px">
-                  <Text noOfLines={1}>{chat.lastMessage}</Text>
-                </Td>
-                <Td>
-                  <Text fontSize="sm" color="gray.600">{chat.lastMessageTime}</Text>
-                </Td>
-                <Td>
-                  {chat.unreadCount > 0 && (
-                    <Badge colorScheme="red" borderRadius="full" px={2}>
-                      {chat.unreadCount}
+                  {chat.unread_count > 0 && (
+                    <Badge colorScheme="red" borderRadius="full" px={3}>
+                      {chat.unread_count}
                     </Badge>
                   )}
                 </Td>
                 <Td>
-                  <Link to={`/admin/chats/${chat.id}`}>
-                    <IconButton
-                      icon={<MessageSquare size={18} />}
-                      size="sm"
-                      colorScheme="blue"
-                      variant="ghost"
-                      aria-label="Chatni ochish"
-                    />
-                  </Link>
+                  <IconButton
+                    as={Link}
+                    to={`/admin/chats/${chat.partner_id}`}  // bitta chat sahifasiga
+                    icon={<MessageSquare />}
+                    size="sm"
+                    colorScheme="blue"
+                    variant="ghost"
+                  />
                 </Td>
               </Tr>
             ))}
