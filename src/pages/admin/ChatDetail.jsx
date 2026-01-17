@@ -44,22 +44,42 @@ export default function ChatDetail() {
     socket.emit("joinChat", chatId);
 
     const fetchMessages = async () => {
-      try {
-        const res = await api(`/messages/${chatId}`);
-        const fetchedMessages = res.data.data.messages || [];
-        setMessages(fetchedMessages); // eski xabarlardan boshlab (ASC)
-      } catch (err) {
-        console.error("Xabarlar olishda xato:", err);
-        toast({
-          title: "Xato",
-          description: "Xabarlar yuklanmadi",
-          status: "error",
-          duration: 5000,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+  try {
+    const res = await api(`/messages/${chatId}`);
+
+    console.log("Backenddan to'liq response:", res.data); // ← bu qatorni qo‘shing, konsolda ko‘rasiz
+
+    let fetchedMessages = [];
+
+    // Variant 1: { success: true, data: { messages: [...] } }
+    if (res.data?.data?.messages) {
+      fetchedMessages = res.data.data.messages;
+    }
+    // Variant 2: { success: true, messages: [...] }
+    else if (res.data?.messages) {
+      fetchedMessages = res.data.messages;
+    }
+    // Variant 3: to‘g‘ridan array
+    else if (Array.isArray(res.data)) {
+      fetchedMessages = res.data;
+    }
+
+    console.log("Parsed messages:", fetchedMessages); // bu ham chiqadi
+
+    setMessages(fetchedMessages || []);
+  } catch (err) {
+    console.error("Xabarlar olishda xato:", err.response?.data || err.message);
+    toast({
+      title: "Xato",
+      description: "Xabarlar yuklanmadi",
+      status: "error",
+      duration: 5000,
+    });
+    setMessages([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
     fetchMessages();
 
