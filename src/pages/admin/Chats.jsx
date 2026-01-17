@@ -41,35 +41,28 @@ export default function AdminChats() {
   try {
     const res = await api("/messages");
 
-    console.log("Backenddan kelgan to'liq response:", res.data); // ← bu muhim! Konsolda ko‘rasiz
+    console.log("Backenddan to'liq response:", res.data);
 
-    // Har qanday formatda kelsa ham tutib olamiz
     let fetchedChats = [];
 
-    if (res.data?.success) {
-      // 1. { success: true, data: { chats: [...] } }
-      if (res.data.data?.chats) {
-        fetchedChats = res.data.data.chats;
-      }
-      // 2. { success: true, chats: [...] }
-      else if (res.data.chats) {
-        fetchedChats = res.data.chats;
-      }
-      // 3. { success: true, data: [...] }
-      else if (Array.isArray(res.data.data)) {
-        fetchedChats = res.data.data;
-      }
-      // 4. To‘g‘ridan array
-      else if (Array.isArray(res.data)) {
-        fetchedChats = res.data;
-      }
+    // Backenddan { chats: [...] } kelganini tutib olamiz
+    if (res.data?.chats && Array.isArray(res.data.chats)) {
+      fetchedChats = res.data.chats;
+    }
+    // Agar { data: { chats: [...] } } bo‘lsa
+    else if (res.data?.data?.chats) {
+      fetchedChats = res.data.data.chats;
+    }
+    // Agar to‘g‘ridan array bo‘lsa
+    else if (Array.isArray(res.data)) {
+      fetchedChats = res.data;
     }
 
-    console.log("Parsed chats:", fetchedChats); // bu ham chiqadi
+    console.log("Parsed chats:", fetchedChats);
 
     setChats(fetchedChats || []);
   } catch (err) {
-    console.error("API xatosi:", err.response?.data || err.message);
+    console.error("Chatlarni olishda xato:", err);
     setChats([]); // xato bo‘lsa bo‘sh ko‘rsat
   } finally {
     setLoading(false);
