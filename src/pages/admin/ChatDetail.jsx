@@ -1,6 +1,5 @@
 // src/pages/admin/ChatDetail.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { Button } from "@chakra-ui/react";
 import {
   Box,
   Heading,
@@ -28,13 +27,13 @@ import socket from "../../utils/socket";
 export default function ChatDetail() {
   const { chatId } = useParams();
   const [messages, setMessages] = useState([]);
+  const [chatInfo, setChatInfo] = useState({ client: null, freelancer: null });
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const toast = useToast();
 
-  // Scroll pastga
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -43,15 +42,12 @@ export default function ChatDetail() {
     socket.connect();
     socket.emit("joinChat", chatId);
 
-    // Xabarlar tarixini olish
-    const fetchMessages = async () => {
+    const fetchData = async () => {
       try {
         const res = await api(`/messages/${chatId}`);
         console.log("Backenddan to'liq response:", res.data);
 
         let fetchedMessages = [];
-
-        // Har qanday formatda kelsa ham tutib olamiz
         if (res.data?.data?.messages) {
           fetchedMessages = res.data.data.messages;
         } else if (res.data?.messages) {
@@ -60,26 +56,30 @@ export default function ChatDetail() {
           fetchedMessages = res.data;
         }
 
-        console.log("Parsed messages:", fetchedMessages);
-
         setMessages(fetchedMessages || []);
+
+        // Partner ma'lumotlarini olish
+        if (res.data?.data?.client && res.data?.data?.freelancer) {
+          setChatInfo({
+            client: res.data.data.client,
+            freelancer: res.data.data.freelancer
+          });
+        }
       } catch (err) {
-        console.error("Xabarlar olishda xato:", err.response?.data || err.message);
+        console.error("Ma'lumotlarni olishda xato:", err);
         toast({
           title: "Xato",
-          description: "Xabarlar yuklanmadi",
+          description: "Chat ma'lumotlari yuklanmadi",
           status: "error",
           duration: 5000,
         });
-        setMessages([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMessages();
+    fetchData();
 
-    // Yangi xabar kelganda
     socket.on("newMessage", (newMsg) => {
       if (newMsg.chat_id === chatId) {
         setMessages((prev) => [...prev, newMsg]);
@@ -87,7 +87,6 @@ export default function ChatDetail() {
       }
     });
 
-    // O‘qilgan yangilanishi
     socket.on("messagesRead", ({ chatId: updatedChatId }) => {
       if (updatedChatId === chatId) {
         setMessages((prev) =>
@@ -107,7 +106,6 @@ export default function ChatDetail() {
     };
   }, [chatId, toast]);
 
-  // Xabar yuborish
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
 
@@ -119,14 +117,11 @@ export default function ChatDetail() {
         type: "text",
       });
 
-      console.log("Yuborilgan xabar response:", res.data);
-
-      // Localda qo‘shish (real-time)
       setMessages((prev) => [...prev, res.data.data.message]);
       setNewMessage("");
       scrollToBottom();
     } catch (err) {
-      console.error("Xabar yuborish xatosi:", err.response?.data || err);
+      console.error("Xabar yuborish xatosi:", err);
       toast({
         title: "Xato",
         description: "Xabar yuborilmadi",
@@ -146,7 +141,7 @@ export default function ChatDetail() {
     return (
       <Flex justify="center" align="center" h="70vh">
         <Spinner size="xl" color="blue.500" />
-        <Text ml={4}>Xabarlar yuklanmoqda...</Text>
+        <Text ml={4}>Chat yuklanmoqda...</Text>
       </Flex>
     );
   }
@@ -164,14 +159,28 @@ export default function ChatDetail() {
               <Box>
                 <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
                 <Flex align="center" gap={6} mt={2}>
-                  {/* Bu yerda keyinroq real ism + avatar chiqariladi */}
+                  {/* Real client */}
                   <Flex align="center" gap={2}>
-                    <Avatar name="Client" size="xs" />
-                    <Text fontSize="sm">Client (@client)</Text>
+                    <Avatar 
+                      name={chatInfo.client?.first_name || "Client"} 
+                      src={chatInfo.client?.avatar_url} 
+                      size="xs" 
+                    />
+                    <Text fontSize="sm">
+                      {chatInfo.client?.first_name || "Client"} (@{chatInfo.client?.username || "client"})
+                    </Text>
                   </Flex>
+
+                  {/* Real freelancer */}
                   <Flex align="center" gap={2}>
-                    <Avatar name="Freelancer" size="xs" />
-                    <Text fontSize="sm">Freelancer (@dev)</Text>
+                    <Avatar 
+                      name={chatInfo.freelancer?.first_name || "Freelancer"} 
+                      src={chatInfo.freelancer?.avatar_url} 
+                      size="xs" 
+                    />
+                    <Text fontSize="sm">
+                      {chatInfo.freelancer?.first_name || "Freelancer"} (@{chatInfo.freelancer?.username || "dev"})
+                    </Text>
                   </Flex>
                 </Flex>
               </Box>
@@ -183,7 +192,7 @@ export default function ChatDetail() {
         </CardHeader>
       </Card>
 
-      {/* Xabarlar oynasi */}
+      {/* Xabarlar */}
       <Box flex="1" overflowY="auto" p={4} bg="gray.50" borderRadius="lg">
         <VStack align="stretch" spacing={4}>
           {messages.length === 0 ? (
@@ -230,7 +239,7 @@ export default function ChatDetail() {
         </VStack>
       </Box>
 
-      {/* Xabar yozish */}
+      {/* Input */}
       <Card mt={4}>
         <CardBody>
           <InputGroup>
