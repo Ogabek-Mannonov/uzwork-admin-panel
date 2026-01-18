@@ -175,6 +175,7 @@ export default function ChatDetail() {
                     </Text>
                   </Flex>
 
+                  
                   {/* Real freelancer */}
                   <Flex align="center" gap={2}>
                     <Avatar
@@ -183,8 +184,8 @@ export default function ChatDetail() {
                       size="xs"
                     />
                     <Text fontSize="sm" fontWeight="medium">
-                      {chatInfo.freelancer
-                        ? `${chatInfo.freelancer.first_name || ""} ${chatInfo.freelancer.last_name || ""}`.trim() || "Freelancer"
+                      {chatInfo.freelancer && chatInfo.freelancer.first_name
+                        ? `${chatInfo.freelancer.first_name} ${chatInfo.freelancer.last_name || ""}`.trim()
                         : "Freelancer hali tanlanmadi"}
                       <Text as="span" fontSize="xs" color="gray.500" ml={1}>
                         (@{chatInfo.freelancer?.username || "freelancer"})
