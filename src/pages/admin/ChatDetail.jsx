@@ -59,11 +59,11 @@ export default function ChatDetail() {
 
         setMessages(fetchedMessages || []);
 
-        // Partner ma'lumotlarini olish
-        if (res.data?.data?.client && res.data?.data?.freelancer) {
+        // Real client va freelancer ma'lumotlarini saqlash
+        if (res.data?.data) {
           setChatInfo({
-            client: res.data.data.client,
-            freelancer: res.data.data.freelancer
+            client: res.data.data.client || null,
+            freelancer: res.data.data.freelancer || null
           });
         }
       } catch (err) {
@@ -92,9 +92,7 @@ export default function ChatDetail() {
       if (updatedChatId === chatId) {
         setMessages((prev) =>
           prev.map((msg) =>
-            !msg.is_read && !msg.sender_is_admin
-              ? { ...msg, is_read: true }
-              : msg
+            !msg.is_read && !msg.sender_is_admin ? { ...msg, is_read: true } : msg
           )
         );
       }
@@ -168,7 +166,7 @@ export default function ChatDetail() {
                       size="xs" 
                     />
                     <Text fontSize="sm">
-                      {chatInfo.client?.first_name || "Client"} (@{chatInfo.client?.username || "client"})
+                      {chatInfo.client?.first_name || "Client"} {chatInfo.client?.last_name || ""} (@{chatInfo.client?.username || "client"})
                     </Text>
                   </Flex>
 
@@ -180,7 +178,7 @@ export default function ChatDetail() {
                       size="xs" 
                     />
                     <Text fontSize="sm">
-                      {chatInfo.freelancer?.first_name || "Freelancer"} (@{chatInfo.freelancer?.username || "dev"})
+                      {chatInfo.freelancer?.first_name || "Freelancer"} {chatInfo.freelancer?.last_name || ""} (@{chatInfo.freelancer?.username || "dev"})
                     </Text>
                   </Flex>
                 </Flex>
