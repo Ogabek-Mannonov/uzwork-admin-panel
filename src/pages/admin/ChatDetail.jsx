@@ -1,7 +1,6 @@
 // src/pages/admin/ChatDetail.jsx
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Button,
   Box,
   Heading,
   Text,
@@ -161,24 +160,36 @@ export default function ChatDetail() {
                   {/* Real client */}
                   <Flex align="center" gap={2}>
                     <Avatar 
-                      name={chatInfo.client?.first_name || "Client"} 
+                      name={`${chatInfo.client?.first_name || "C"} ${chatInfo.client?.last_name || ""}`.trim() || "Client"} 
                       src={chatInfo.client?.avatar_url} 
                       size="xs" 
                     />
-                    <Text fontSize="sm">
-                      {chatInfo.client?.first_name || "Client"} {chatInfo.client?.last_name || ""} (@{chatInfo.client?.username || "client"})
+                    <Text fontSize="sm" fontWeight="medium">
+                      {chatInfo.client?.first_name || "Client"} {chatInfo.client?.last_name || ""} 
+                      <Text as="span" fontSize="xs" color="gray.500">
+                        (@{chatInfo.client?.username || "client"})
+                      </Text>
                     </Text>
                   </Flex>
 
                   {/* Real freelancer */}
                   <Flex align="center" gap={2}>
                     <Avatar 
-                      name={chatInfo.freelancer?.first_name || "Freelancer"} 
+                      name={`${chatInfo.freelancer?.first_name || "F"} ${chatInfo.freelancer?.last_name || ""}`.trim() || "Freelancer"} 
                       src={chatInfo.freelancer?.avatar_url} 
                       size="xs" 
                     />
-                    <Text fontSize="sm">
-                      {chatInfo.freelancer?.first_name || "Freelancer"} {chatInfo.freelancer?.last_name || ""} (@{chatInfo.freelancer?.username || "dev"})
+                    <Text fontSize="sm" fontWeight="medium">
+                      {chatInfo.freelancer ? (
+                        <>
+                          {chatInfo.freelancer.first_name} {chatInfo.freelancer.last_name || ""} 
+                          <Text as="span" fontSize="xs" color="gray.500">
+                            (@{chatInfo.freelancer.username || "freelancer"})
+                          </Text>
+                        </>
+                      ) : (
+                        "Freelancer hali tanlanmadi"
+                      )}
                     </Text>
                   </Flex>
                 </Flex>
@@ -238,7 +249,7 @@ export default function ChatDetail() {
         </VStack>
       </Box>
 
-      {/* Input */}
+      {/* Xabar yozish */}
       <Card mt={4}>
         <CardBody>
           <InputGroup>
