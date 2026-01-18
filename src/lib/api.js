@@ -15,12 +15,12 @@ const api = async (endpoint, options = {}) => {
 
   const response = await fetch(`${API_URL}${endpoint}`, config);
 
-  // Agar token muddati tugagan bo‘lsa – login ga yo‘naltir
-  // if (response.status === 401) {
-  //   localStorage.removeItem("accessToken");
-  //   window.location.href = "/admin/login";
-  //   return;
-  // }
+  // Agar token muddati tugagan bo'lsa – login ga yo'naltir
+  if (response.status === 401) {
+    localStorage.removeItem("accessToken");
+    window.location.href = "/admin/login";
+    return;
+  }
 
   const data = await response.json();
 
@@ -29,6 +29,44 @@ const api = async (endpoint, options = {}) => {
   }
 
   return data;
+};
+
+// POST method
+api.post = async (endpoint, body) => {
+  return api(endpoint, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+};
+
+// GET method
+api.get = async (endpoint) => {
+  return api(endpoint, {
+    method: "GET",
+  });
+};
+
+// PUT method
+api.put = async (endpoint, body) => {
+  return api(endpoint, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+};
+
+// PATCH method
+api.patch = async (endpoint, body) => {
+  return api(endpoint, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+};
+
+// DELETE method
+api.delete = async (endpoint) => {
+  return api(endpoint, {
+    method: "DELETE",
+  });
 };
 
 export default api;
