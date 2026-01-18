@@ -1,6 +1,5 @@
 // src/pages/admin/ChatDetail.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { Button } from "@chakra-ui/react";  // ← bu qatorni qo‘shing
 import {
   Box,
   Heading,
@@ -16,7 +15,6 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
-  Divider,
   Spinner,
   Badge,
   useToast,
@@ -35,6 +33,7 @@ export default function ChatDetail() {
   const messagesEndRef = useRef(null);
   const toast = useToast();
 
+  // Scroll pastga
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -43,43 +42,39 @@ export default function ChatDetail() {
     socket.connect();
     socket.emit("joinChat", chatId);
 
+    // Xabarlar tarixini olish
     const fetchMessages = async () => {
-  try {
-    const res = await api(`/messages/${chatId}`);
+      try {
+        const res = await api(`/messages/${chatId}`);
+        console.log("Backenddan to'liq response:", res.data);
 
-    console.log("Backenddan to'liq response:", res.data); // ← bu qatorni qo‘shing, konsolda ko‘rasiz
+        let fetchedMessages = [];
 
-    let fetchedMessages = [];
+        // Har qanday formatda kelsa ham tutib olamiz
+        if (res.data?.data?.messages) {
+          fetchedMessages = res.data.data.messages;
+        } else if (res.data?.messages) {
+          fetchedMessages = res.data.messages;
+        } else if (Array.isArray(res.data)) {
+          fetchedMessages = res.data;
+        }
 
-    // Variant 1: { success: true, data: { messages: [...] } }
-    if (res.data?.data?.messages) {
-      fetchedMessages = res.data.data.messages;
-    }
-    // Variant 2: { success: true, messages: [...] }
-    else if (res.data?.messages) {
-      fetchedMessages = res.data.messages;
-    }
-    // Variant 3: to‘g‘ridan array
-    else if (Array.isArray(res.data)) {
-      fetchedMessages = res.data;
-    }
+        console.log("Parsed messages:", fetchedMessages);
 
-    console.log("Parsed messages:", fetchedMessages); // bu ham chiqadi
-
-    setMessages(fetchedMessages || []);
-  } catch (err) {
-    console.error("Xabarlar olishda xato:", err.response?.data || err.message);
-    toast({
-      title: "Xato",
-      description: "Xabarlar yuklanmadi",
-      status: "error",
-      duration: 5000,
-    });
-    setMessages([]);
-  } finally {
-    setLoading(false);
-  }
-};
+        setMessages(fetchedMessages || []);
+      } catch (err) {
+        console.error("Xabarlar olishda xato:", err.response?.data || err.message);
+        toast({
+          title: "Xato",
+          description: "Xabarlar yuklanmadi",
+          status: "error",
+          duration: 5000,
+        });
+        setMessages([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
     fetchMessages();
 
@@ -91,13 +86,13 @@ export default function ChatDetail() {
       }
     });
 
-    // O‘qilgan yangilanishi (admin uchun)
+    // O‘qilgan yangilanishi
     socket.on("messagesRead", ({ chatId: updatedChatId }) => {
       if (updatedChatId === chatId) {
         setMessages((prev) =>
           prev.map((msg) =>
-            !msg.is_read && msg.sender_id !== "sizning_admin_id" 
-              ? { ...msg, is_read: true } 
+            !msg.is_read && !msg.sender_is_admin
+              ? { ...msg, is_read: true }
               : msg
           )
         );
@@ -111,6 +106,7 @@ export default function ChatDetail() {
     };
   }, [chatId, toast]);
 
+  // Xabar yuborish
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
 
@@ -122,12 +118,14 @@ export default function ChatDetail() {
         type: "text",
       });
 
-      // Localda qo‘shish
+      console.log("Yuborilgan xabar response:", res.data);
+
+      // Localda qo‘shish (real-time)
       setMessages((prev) => [...prev, res.data.data.message]);
       setNewMessage("");
       scrollToBottom();
     } catch (err) {
-      console.error("Xabar yuborish xatosi:", err);
+      console.error("Xabar yuborish xatosi:", err.response?.data || err);
       toast({
         title: "Xato",
         description: "Xabar yuborilmadi",
@@ -165,7 +163,7 @@ export default function ChatDetail() {
               <Box>
                 <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
                 <Flex align="center" gap={6} mt={2}>
-                  {/* Real ma'lumot keyinroq qo‘shiladi */}
+                  {/* Bu yerda keyinroq real ism + avatar chiqariladi */}
                   <Flex align="center" gap={2}>
                     <Avatar name="Client" size="xs" />
                     <Text fontSize="sm">Client (@client)</Text>
@@ -184,7 +182,7 @@ export default function ChatDetail() {
         </CardHeader>
       </Card>
 
-      {/* Xabarlar */}
+      {/* Xabarlar oynasi */}
       <Box flex="1" overflowY="auto" p={4} bg="gray.50" borderRadius="lg">
         <VStack align="stretch" spacing={4}>
           {messages.length === 0 ? (
@@ -231,7 +229,7 @@ export default function ChatDetail() {
         </VStack>
       </Box>
 
-      {/* Input */}
+      {/* Xabar yozish */}
       <Card mt={4}>
         <CardBody>
           <InputGroup>
