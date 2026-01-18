@@ -19,8 +19,10 @@ import {
   Spinner,
   Badge,
   useToast,
+  Progress,
+  Tooltip,
 } from "@chakra-ui/react";
-import { ArrowLeft, Send, Paperclip, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Send, Paperclip, AlertTriangle, Mic, Square, Play, Pause } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import api from "../../lib/api";
 import socket from "../../utils/socket";
@@ -34,6 +36,18 @@ export default function ChatDetail() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const toast = useToast();
+
+  // Voice recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  // Audio playback states
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+  const audioRefs = useRef({});
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -149,6 +163,168 @@ export default function ChatDetail() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Voice recording functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      // Timer
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
+      toast({
+        title: "Yozish boshlandi",
+        description: "Ovozli xabar yozilmoqda...",
+        status: "info",
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error("Mikrofon xatosi:", error);
+      toast({
+        title: "Xato",
+        description: "Mikrofondan foydalanib bo'lmadi",
+        status: "error",
+        duration: 3000,
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setAudioBlob(null);
+      setRecordingTime(0);
+      clearInterval(timerRef.current);
+      
+      toast({
+        title: "Bekor qilindi",
+        description: "Ovozli xabar bekor qilindi",
+        status: "warning",
+        duration: 2000,
+      });
+    }
+  };
+
+  const sendVoiceMessage = async () => {
+    if (!audioBlob) return;
+
+    setSending(true);
+    try {
+      // FormData yaratish
+      const formData = new FormData();
+      formData.append('voice', audioBlob, 'voice-message.webm');
+
+      // File upload endpoint
+      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/upload/voice`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`, // ✅ Token qaytarildi
+        },
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json();
+        throw new Error(errorData.message || 'Upload xatosi');
+      }
+
+      const uploadData = await uploadRes.json();
+      const voiceUrl = uploadData.data.url;
+
+      // Voice message yuborish
+      const res = await api.post(`/messages/${chatId}/voice`, {
+        voice_url: voiceUrl,
+      });
+
+      const sentMessage = res.data?.message || res.message;
+      if (sentMessage) {
+        setMessages((prev) => [...prev, sentMessage]);
+      }
+
+      // Reset
+      setAudioBlob(null);
+      setRecordingTime(0);
+      scrollToBottom();
+
+      toast({
+        title: "Yuborildi",
+        description: "Ovozli xabar yuborildi",
+        status: "success",
+        duration: 2000,
+      });
+    } catch (err) {
+      console.error("Voice xabar yuborish xatosi:", err);
+      toast({
+        title: "Xato",
+        description: err.message || "Ovozli xabar yuborilmadi",
+        status: "error",
+        duration: 3000,
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const toggleAudioPlayback = (messageId, audioUrl) => {
+    const audio = audioRefs.current[messageId];
+
+    if (!audio) {
+      const newAudio = new Audio(audioUrl);
+      audioRefs.current[messageId] = newAudio;
+      
+      newAudio.onended = () => {
+        setPlayingAudioId(null);
+      };
+
+      newAudio.play();
+      setPlayingAudioId(messageId);
+    } else {
+      if (playingAudioId === messageId) {
+        audio.pause();
+        setPlayingAudioId(null);
+      } else {
+        audio.play();
+        setPlayingAudioId(messageId);
+      }
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   if (loading) {
     return (
@@ -316,8 +492,25 @@ export default function ChatDetail() {
                     borderRadius="lg"
                     boxShadow="md"
                   >
-                    <Text>{msg.content}</Text>
-                    {msg.file_url && (
+                    {/* Text xabar */}
+                    {msg.type === 'text' && <Text>{msg.content}</Text>}
+                    
+                    {/* Voice xabar */}
+                    {msg.type === 'voice' && msg.file_url && (
+                      <HStack spacing={3}>
+                        <IconButton
+                          icon={playingAudioId === msg.id ? <Pause size={18} /> : <Play size={18} />}
+                          size="sm"
+                          colorScheme={isAdminMessage ? "whiteAlpha" : "blue"}
+                          onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
+                          aria-label="Play/Pause"
+                        />
+                        <Text fontSize="sm">Ovozli xabar</Text>
+                      </HStack>
+                    )}
+
+                    {/* File xabar */}
+                    {msg.type === 'file' && msg.file_url && (
                       <HStack mt={2}>
                         <Paperclip size={16} />
                         <Text fontSize="sm" color={isAdminMessage ? "blue.100" : "blue.600"}>
@@ -349,27 +542,93 @@ export default function ChatDetail() {
       {/* Xabar yozish */}
       <Card mt={4}>
         <CardBody>
-          <InputGroup>
-            <Input
-              placeholder="Xabar yozing..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => e.key === "Enter" && !sending && handleSendMessage()}
-              disabled={sending}
-            />
-            <InputRightElement width="4.5rem">
-              <HStack>
-                <IconButton icon={<Paperclip size={18} />} variant="ghost" aria-label="Fayl" />
-                <IconButton
-                  icon={<Send size={18} />}
-                  colorScheme="blue"
-                  onClick={handleSendMessage}
-                  isLoading={sending}
-                  aria-label="Yuborish"
-                />
+          {/* Agar recording bo'lsa */}
+          {isRecording && (
+            <VStack spacing={3} mb={4}>
+              <HStack justify="space-between" w="full">
+                <HStack>
+                  <Box w={3} h={3} bg="red.500" borderRadius="full" animation="pulse 1.5s infinite" />
+                  <Text fontWeight="medium">Yozilmoqda...</Text>
+                </HStack>
+                <Text fontWeight="bold" color="red.500">{formatTime(recordingTime)}</Text>
               </HStack>
-            </InputRightElement>
-          </InputGroup>
+              <Progress value={(recordingTime / 60) * 100} w="full" colorScheme="red" size="sm" />
+              <HStack spacing={2}>
+                <Button colorScheme="red" size="sm" onClick={cancelRecording}>
+                  Bekor qilish
+                </Button>
+                <Button colorScheme="green" size="sm" onClick={stopRecording}>
+                  To'xtatish
+                </Button>
+              </HStack>
+            </VStack>
+          )}
+
+          {/* Agar audio blob bor bo'lsa (preview) */}
+          {audioBlob && !isRecording && (
+            <HStack spacing={3} mb={4} p={3} bg="gray.50" borderRadius="md">
+              <IconButton
+                icon={<Play size={18} />}
+                size="sm"
+                colorScheme="blue"
+                onClick={() => {
+                  const audio = new Audio(URL.createObjectURL(audioBlob));
+                  audio.play();
+                }}
+                aria-label="Preview"
+              />
+              <Text flex={1}>Ovozli xabar ({formatTime(recordingTime)})</Text>
+              <Button size="sm" colorScheme="red" variant="ghost" onClick={() => setAudioBlob(null)}>
+                O'chirish
+              </Button>
+              <Button size="sm" colorScheme="blue" onClick={sendVoiceMessage} isLoading={sending}>
+                Yuborish
+              </Button>
+            </HStack>
+          )}
+
+          {/* Text input */}
+          {!isRecording && !audioBlob && (
+            <InputGroup>
+              <Input
+                placeholder="Xabar yozing..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && !sending && handleSendMessage()}
+                disabled={sending}
+              />
+              <InputRightElement width="6rem">
+                <HStack spacing={1}>
+                  <Tooltip label="Fayl yuklash">
+                    <IconButton 
+                      icon={<Paperclip size={18} />} 
+                      variant="ghost" 
+                      size="sm"
+                      aria-label="Fayl" 
+                    />
+                  </Tooltip>
+                  <Tooltip label="Ovozli xabar">
+                    <IconButton
+                      icon={<Mic size={18} />}
+                      variant="ghost"
+                      size="sm"
+                      colorScheme="red"
+                      onClick={startRecording}
+                      aria-label="Voice"
+                    />
+                  </Tooltip>
+                  <IconButton
+                    icon={<Send size={18} />}
+                    colorScheme="blue"
+                    size="sm"
+                    onClick={handleSendMessage}
+                    isLoading={sending}
+                    aria-label="Yuborish"
+                  />
+                </HStack>
+              </InputRightElement>
+            </InputGroup>
+          )}
         </CardBody>
       </Card>
     </Box>
