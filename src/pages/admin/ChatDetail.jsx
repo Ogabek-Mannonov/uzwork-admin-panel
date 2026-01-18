@@ -48,31 +48,24 @@ export default function ChatDetail() {
         const res = await api(`/messages/${chatId}`);
         console.log("Backenddan to'liq response:", res.data);
 
-        // Xabarlar
         let fetchedMessages = [];
-        if (res.data?.messages) {
-          fetchedMessages = res.data.messages;
-        } else if (res.data?.data?.messages) {
+        if (res.data?.data?.messages) {
           fetchedMessages = res.data.data.messages;
+        } else if (res.data?.messages) {
+          fetchedMessages = res.data.messages;
         } else if (Array.isArray(res.data)) {
           fetchedMessages = res.data;
         }
 
         setMessages(fetchedMessages || []);
 
-        // Client va freelancer ma'lumotlarini saqlash
-        const clientData = res.data?.client || null;
-        const freelancerData = res.data?.freelancer || null;
-
-        setChatInfo({
-          client: clientData,
-          freelancer: freelancerData
-        });
-
-        console.log("Client info:", clientData);
-        console.log("Freelancer info:", freelancerData);
-        console.log("Client full name:", clientData ? `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() : 'N/A');
-        console.log("Freelancer full name:", freelancerData ? `${freelancerData.first_name || ''} ${freelancerData.last_name || ''}`.trim() : 'N/A');
+        // Real client va freelancer ma'lumotlarini saqlash
+        if (res.data?.data) {
+          setChatInfo({
+            client: res.data.data.client || null,
+            freelancer: res.data.data.freelancer || null
+          });
+        }
       } catch (err) {
         console.error("Ma'lumotlarni olishda xato:", err);
         toast({
@@ -166,50 +159,44 @@ export default function ChatDetail() {
                 <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
                 <Flex align="center" gap={6} mt={2}>
                   {/* Client */}
-                  {chatInfo.client && (
-                    <Flex align="center" gap={2}>
-                      <Avatar
-                        name={`${chatInfo.client.first_name || ''} ${chatInfo.client.last_name || ''}`}
-                        src={chatInfo.client.avatar_url || undefined}
-                        size="sm"
-                        bg="red.500"
-                        color="white"
-                      />
-                      <Box>
-                        <Text fontSize="sm" fontWeight="medium">
-                          {chatInfo.client.first_name || chatInfo.client.last_name
-                            ? `${chatInfo.client.first_name || ''} ${chatInfo.client.last_name || ''}`.trim()
-                            : "Client"}
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          @{chatInfo.client.username || "client"}
-                        </Text>
-                      </Box>
-                    </Flex>
-                  )}
+                  <Flex align="center" gap={2}>
+                    <Avatar
+                      name={`${chatInfo.client?.first_name || "C"} ${chatInfo.client?.last_name || ""}`.trim() || "Client"}
+                      src={chatInfo.client?.avatar_url}
+                      size="sm"
+                      bg="red.500"
+                      color="white"
+                    />
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium">
+                        {chatInfo.client?.first_name || "Client"} {chatInfo.client?.last_name || ""}
+                      </Text>
+                      <Text fontSize="xs" color="gray.500">
+                        @{chatInfo.client?.username || "client"}
+                      </Text>
+                    </Box>
+                  </Flex>
 
                   {/* Freelancer */}
-                  {chatInfo.freelancer && (
-                    <Flex align="center" gap={2}>
-                      <Avatar
-                        name={`${chatInfo.freelancer.first_name || ''} ${chatInfo.freelancer.last_name || ''}`}
-                        src={chatInfo.freelancer.avatar_url || undefined}
-                        size="sm"
-                        bg="orange.500"
-                        color="white"
-                      />
-                      <Box>
-                        <Text fontSize="sm" fontWeight="medium">
-                          {chatInfo.freelancer.first_name || chatInfo.freelancer.last_name
-                            ? `${chatInfo.freelancer.first_name || ''} ${chatInfo.freelancer.last_name || ''}`.trim()
-                            : "Freelancer"}
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          @{chatInfo.freelancer.username || "freelancer"}
-                        </Text>
-                      </Box>
-                    </Flex>
-                  )}
+                  <Flex align="center" gap={2}>
+                    <Avatar
+                      name={`${chatInfo.freelancer?.first_name || "F"} ${chatInfo.freelancer?.last_name || ""}`.trim() || "Freelancer"}
+                      src={chatInfo.freelancer?.avatar_url}
+                      size="sm"
+                      bg="orange.500"
+                      color="white"
+                    />
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium">
+                        {chatInfo.freelancer?.first_name 
+                          ? `${chatInfo.freelancer.first_name} ${chatInfo.freelancer.last_name || ""}`.trim()
+                          : "Freelancer hali tanlanmadi"}
+                      </Text>
+                      <Text fontSize="xs" color="gray.500">
+                        @{chatInfo.freelancer?.username || "freelancer"}
+                      </Text>
+                    </Box>
+                  </Flex>
                 </Flex>
               </Box>
             </Flex>
@@ -225,7 +212,7 @@ export default function ChatDetail() {
         <VStack align="stretch" spacing={4}>
           {messages.length === 0 ? (
             <Text textAlign="center" color="gray.500" py={10}>
-              Hozircha xabarlar yo'q
+              Hozircha xabarlar yo‘q
             </Text>
           ) : (
             messages.map((msg) => (
@@ -246,7 +233,7 @@ export default function ChatDetail() {
                   {msg.file_url && (
                     <HStack mt={2}>
                       <Paperclip size={16} />
-                      <Text fontSize="sm" color="blue.600">
+                      <Text fontSize="sm" color={msg.sender_is_admin ? "white" : "blue.600"}>
                         Fayl: {msg.file_url.split('/').pop()}
                       </Text>
                     </HStack>
@@ -258,7 +245,7 @@ export default function ChatDetail() {
                   </Text>
                   {msg.is_read && msg.sender_is_admin && (
                     <Badge ml={2} colorScheme="green" fontSize="xs">
-                      O'qildi
+                      O‘qildi
                     </Badge>
                   )}
                 </HStack>
