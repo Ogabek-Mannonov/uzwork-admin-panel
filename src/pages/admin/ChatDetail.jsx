@@ -1,5 +1,6 @@
 // src/pages/admin/ChatDetail.jsx
 import React, { useState, useEffect, useRef } from "react";
+import { Button } from "../../components/ui/button";
 import {
   Box,
   Heading,
