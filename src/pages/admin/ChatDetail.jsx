@@ -48,6 +48,7 @@ export default function ChatDetail() {
         const res = await api(`/messages/${chatId}`);
         console.log("Backenddan to'liq response:", res.data);
 
+        // Xabarlar
         let fetchedMessages = [];
         if (res.data?.data?.messages) {
           fetchedMessages = res.data.data.messages;
@@ -59,7 +60,7 @@ export default function ChatDetail() {
 
         setMessages(fetchedMessages || []);
 
-        // Real client va freelancer ma'lumotlarini saqlash
+        // Client va freelancer ma'lumotlarini saqlash
         if (res.data?.data) {
           setChatInfo({
             client: res.data.data.client || null,
@@ -158,7 +159,7 @@ export default function ChatDetail() {
               <Box>
                 <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
                 <Flex align="center" gap={6} mt={2}>
-                  {/* Real client */}
+                  {/* Client */}
                   <Flex align="center" gap={2}>
                     <Avatar
                       name={`${chatInfo.client?.first_name || "C"} ${chatInfo.client?.last_name || ""}`.trim() || "Client"}
@@ -166,17 +167,14 @@ export default function ChatDetail() {
                       size="xs"
                     />
                     <Text fontSize="sm" fontWeight="medium">
-                      {chatInfo.client
-                        ? `${chatInfo.client.first_name || ""} ${chatInfo.client.last_name || ""}`.trim() || "Client"
-                        : "Client"}
+                      {chatInfo.client?.first_name || "Client"} {chatInfo.client?.last_name || ""}
                       <Text as="span" fontSize="xs" color="gray.500" ml={1}>
                         (@{chatInfo.client?.username || "client"})
                       </Text>
                     </Text>
                   </Flex>
 
-                  
-                  {/* Real freelancer */}
+                  {/* Freelancer */}
                   <Flex align="center" gap={2}>
                     <Avatar
                       name={`${chatInfo.freelancer?.first_name || "F"} ${chatInfo.freelancer?.last_name || ""}`.trim() || "Freelancer"}
@@ -184,7 +182,7 @@ export default function ChatDetail() {
                       size="xs"
                     />
                     <Text fontSize="sm" fontWeight="medium">
-                      {chatInfo.freelancer && chatInfo.freelancer.first_name
+                      {chatInfo.freelancer?.first_name 
                         ? `${chatInfo.freelancer.first_name} ${chatInfo.freelancer.last_name || ""}`.trim()
                         : "Freelancer hali tanlanmadi"}
                       <Text as="span" fontSize="xs" color="gray.500" ml={1}>
@@ -228,7 +226,9 @@ export default function ChatDetail() {
                   {msg.file_url && (
                     <HStack mt={2}>
                       <Paperclip size={16} />
-                      <Text fontSize="sm" color="blue.600">Fayl: {msg.file_url.split('/').pop()}</Text>
+                      <Text fontSize="sm" color="blue.600">
+                        Fayl: {msg.file_url.split('/').pop()}
+                      </Text>
                     </HStack>
                   )}
                 </Box>
