@@ -162,14 +162,16 @@ export default function ChatDetail() {
                   {/* Client */}
                   <Flex align="center" gap={2}>
                     <Avatar
-                      name={`${chatInfo.client?.first_name || "C"} ${chatInfo.client?.last_name || ""}`.trim() || "Client"}
-                      src={chatInfo.client?.avatar_url}
+                      name={`${chatInfo?.client?.first_name || "C"} ${chatInfo?.client?.last_name || ""}`.trim() || "Client"}
+                      src={chatInfo?.client?.avatar_url}
                       size="xs"
                     />
                     <Text fontSize="sm" fontWeight="medium">
-                      {chatInfo.client?.first_name || "Client"} {chatInfo.client?.last_name || ""}
+                      {chatInfo?.client?.first_name
+                        ? `${chatInfo.client.first_name} ${chatInfo.client.last_name || ""}`.trim()
+                        : "Client"}
                       <Text as="span" fontSize="xs" color="gray.500" ml={1}>
-                        (@{chatInfo.client?.username || "client"})
+                        (@{chatInfo?.client?.username || "client"})
                       </Text>
                     </Text>
                   </Flex>
@@ -177,16 +179,16 @@ export default function ChatDetail() {
                   {/* Freelancer */}
                   <Flex align="center" gap={2}>
                     <Avatar
-                      name={`${chatInfo.freelancer?.first_name || "F"} ${chatInfo.freelancer?.last_name || ""}`.trim() || "Freelancer"}
-                      src={chatInfo.freelancer?.avatar_url}
+                      name={`${chatInfo?.freelancer?.first_name || "F"} ${chatInfo?.freelancer?.last_name || ""}`.trim() || "Freelancer"}
+                      src={chatInfo?.freelancer?.avatar_url}
                       size="xs"
                     />
                     <Text fontSize="sm" fontWeight="medium">
-                      {chatInfo.freelancer?.first_name 
+                      {chatInfo?.freelancer?.first_name
                         ? `${chatInfo.freelancer.first_name} ${chatInfo.freelancer.last_name || ""}`.trim()
                         : "Freelancer hali tanlanmadi"}
                       <Text as="span" fontSize="xs" color="gray.500" ml={1}>
-                        (@{chatInfo.freelancer?.username || "freelancer"})
+                        (@{chatInfo?.freelancer?.username || "freelancer"})
                       </Text>
                     </Text>
                   </Flex>
