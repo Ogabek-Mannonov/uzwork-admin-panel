@@ -123,7 +123,14 @@ export default function ChatDetail() {
         type: "text",
       });
 
-      setMessages((prev) => [...prev, res.data.data.message]);
+      console.log("Yuborilgan xabar response:", res.data);
+
+      // Yangi xabarni qo'shish
+      const sentMessage = res.data?.data?.message || res.data?.message;
+      if (sentMessage) {
+        setMessages((prev) => [...prev, sentMessage]);
+      }
+      
       setNewMessage("");
       scrollToBottom();
     } catch (err) {
@@ -229,36 +236,41 @@ export default function ChatDetail() {
             </Text>
           ) : (
             messages.map((msg) => {
-              // Yuboruvchini aniqlash
+              // Yuboruvchini aniqlash - sender_role dan
               let sender = null;
-              let senderName = "Admin";
-              let senderRole = "admin";
-              let avatarBg = "blue.500";
+              let senderName = "Unknown";
+              let avatarBg = "gray.500";
 
-              if (msg.sender_is_admin) {
+              // Backend dan kelgan sender_role orqali aniqlash
+              if (msg.sender_role === 'admin') {
                 senderName = "Admin";
-                senderRole = "admin";
                 avatarBg = "blue.500";
-              } else if (msg.sender_id === chatInfo.client?.id) {
+              } else if (msg.sender_role === 'client' || msg.sender_id === chatInfo.client?.id) {
                 sender = chatInfo.client;
-                senderName = sender.first_name || sender.last_name 
+                senderName = sender?.first_name || sender?.last_name 
                   ? `${sender.first_name || ''} ${sender.last_name || ''}`.trim()
-                  : "Client";
-                senderRole = "client";
+                  : msg.sender_first_name || msg.sender_last_name
+                    ? `${msg.sender_first_name || ''} ${msg.sender_last_name || ''}`.trim()
+                    : "Client";
                 avatarBg = "red.500";
-              } else if (msg.sender_id === chatInfo.freelancer?.id) {
+              } else if (msg.sender_role === 'freelancer' || msg.sender_id === chatInfo.freelancer?.id) {
                 sender = chatInfo.freelancer;
-                senderName = sender.first_name || sender.last_name
+                senderName = sender?.first_name || sender?.last_name
                   ? `${sender.first_name || ''} ${sender.last_name || ''}`.trim()
-                  : "Freelancer";
-                senderRole = "freelancer";
+                  : msg.sender_first_name || msg.sender_last_name
+                    ? `${msg.sender_first_name || ''} ${msg.sender_last_name || ''}`.trim()
+                    : "Freelancer";
                 avatarBg = "orange.500";
               }
+
+              const isAdminMessage = msg.sender_role === 'admin';
+              const avatarUrl = sender?.avatar_url || msg.sender_avatar;
+              const username = sender?.username || msg.sender_username;
 
               return (
                 <Flex
                   key={msg.id}
-                  alignSelf={msg.sender_is_admin ? "flex-end" : "flex-start"}
+                  alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
                   maxW="70%"
                   direction="column"
                   gap={2}
@@ -267,12 +279,12 @@ export default function ChatDetail() {
                   <Flex 
                     align="center" 
                     gap={2} 
-                    alignSelf={msg.sender_is_admin ? "flex-end" : "flex-start"}
+                    alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
                   >
-                    {!msg.sender_is_admin && (
+                    {!isAdminMessage && (
                       <Avatar
                         name={senderName}
-                        src={sender?.avatar_url || undefined}
+                        src={avatarUrl || undefined}
                         size="xs"
                         bg={avatarBg}
                         color="white"
@@ -280,13 +292,13 @@ export default function ChatDetail() {
                     )}
                     <Text fontSize="xs" fontWeight="semibold" color="gray.600">
                       {senderName}
-                      {sender?.username && (
+                      {username && (
                         <Text as="span" fontWeight="normal" color="gray.500" ml={1}>
-                          @{sender.username}
+                          @{username}
                         </Text>
                       )}
                     </Text>
-                    {msg.sender_is_admin && (
+                    {isAdminMessage && (
                       <Avatar
                         name={senderName}
                         size="xs"
@@ -298,8 +310,8 @@ export default function ChatDetail() {
 
                   {/* Xabar matni */}
                   <Box
-                    bg={msg.sender_is_admin ? "blue.500" : "white"}
-                    color={msg.sender_is_admin ? "white" : "black"}
+                    bg={isAdminMessage ? "blue.500" : "white"}
+                    color={isAdminMessage ? "white" : "black"}
                     p={4}
                     borderRadius="lg"
                     boxShadow="md"
@@ -308,7 +320,7 @@ export default function ChatDetail() {
                     {msg.file_url && (
                       <HStack mt={2}>
                         <Paperclip size={16} />
-                        <Text fontSize="sm" color={msg.sender_is_admin ? "blue.100" : "blue.600"}>
+                        <Text fontSize="sm" color={isAdminMessage ? "blue.100" : "blue.600"}>
                           Fayl: {msg.file_url.split('/').pop()}
                         </Text>
                       </HStack>
@@ -316,11 +328,11 @@ export default function ChatDetail() {
                   </Box>
 
                   {/* Vaqt va status */}
-                  <HStack mt={1} alignSelf={msg.sender_is_admin ? "flex-end" : "flex-start"}>
+                  <HStack mt={1} alignSelf={isAdminMessage ? "flex-end" : "flex-start"}>
                     <Text fontSize="xs" color="gray.500">
                       {new Date(msg.created_at).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}
                     </Text>
-                    {msg.is_read && msg.sender_is_admin && (
+                    {msg.is_read && isAdminMessage && (
                       <Badge ml={2} colorScheme="green" fontSize="xs">
                         O'qildi
                       </Badge>
