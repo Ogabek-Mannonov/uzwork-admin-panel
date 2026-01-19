@@ -122,8 +122,13 @@ export default function ChatDetail() {
     socket.on("newMessage", (newMsg) => {
       if (newMsg.chat_id === chatId) {
         setMessages((prev) => {
+          // Duplicate check - agar allaqachon mavjud bo'lsa qo'shmaymiz
           const exists = prev.some(msg => msg.id === newMsg.id);
-          if (exists) return prev;
+          if (exists) {
+            console.log('Duplicate message ignored:', newMsg.id);
+            return prev;
+          }
+          console.log('New message added:', newMsg.id);
           return [...prev, newMsg];
         });
         scrollToBottom();
@@ -140,6 +145,7 @@ export default function ChatDetail() {
       }
     });
 
+    // Edit va Delete events
     socket.on("messageEdited", ({ messageId, content, updated_at }) => {
       setMessages((prev) =>
         prev.map(msg =>
@@ -151,6 +157,7 @@ export default function ChatDetail() {
     });
 
     socket.on("messageDeleted", ({ messageId }) => {
+      console.log('Message deleted via socket:', messageId);
       setMessages((prev) => prev.filter(msg => msg.id !== messageId));
     });
 
@@ -168,12 +175,17 @@ export default function ChatDetail() {
 
     setSending(true);
     try {
-      await api.post("/messages", {
+      const res = await api.post("/messages", {
         chat_id: chatId,
         message_text: newMessage,
         type: "text",
       });
 
+      const sentMessage = res.data?.data?.message || res.data?.message;
+      if (sentMessage) {
+        setMessages((prev) => [...prev, sentMessage]);
+      }
+      
       setNewMessage("");
       scrollToBottom();
     } catch (err) {
@@ -291,6 +303,16 @@ export default function ChatDetail() {
       const res = await api.post(`/messages/${chatId}/voice`, {
         voice_url: voiceUrl,
       });
+
+      const sentMessage = res.data?.message || res.message;
+      if (sentMessage) {
+        // Duplicate check
+        setMessages((prev) => {
+          const exists = prev.some(msg => msg.id === sentMessage.id);
+          if (exists) return prev;
+          return [...prev, sentMessage];
+        });
+      }
 
       setAudioBlob(null);
       setRecordingTime(0);
@@ -423,6 +445,7 @@ export default function ChatDetail() {
     try {
       await api.delete(`/messages/${selectedMessage.id}`);
 
+      // Local state dan o'chirish
       setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
 
       toast({
@@ -433,7 +456,7 @@ export default function ChatDetail() {
       });
 
       onDeleteClose();
-      setSelectedMessage(null);
+      setSelectedMessage(null); // Cleanup
     } catch (error) {
       console.error('Delete error:', error);
       toast({
@@ -632,7 +655,7 @@ export default function ChatDetail() {
                           )}
                         </Box>
                       )}
-
+                      
                       {msg.type === 'voice' && msg.file_url && (
                         <HStack spacing={3}>
                           <IconButton
