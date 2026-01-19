@@ -73,6 +73,8 @@ export default function ChatDetail() {
   const currentUserId = localStorage.getItem('userId');
   const isAdmin = localStorage.getItem('userRole') === 'admin';
 
+  console.log('Current user info:', { currentUserId, isAdmin });
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -379,14 +381,16 @@ export default function ChatDetail() {
   // Context Menu handlers
   const handleContextMenu = (e, message) => {
     e.preventDefault();
-    if (canEditDelete(message)) {
-      setContextMenu({
-        visible: true,
-        x: e.clientX,
-        y: e.clientY,
-        message: message
-      });
-    }
+    console.log('Right-click on message:', message);
+    console.log('Can edit/delete:', canEditDelete(message));
+    
+    // VAQTINCHALIK - har doim ko'rsatish (test uchun)
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      message: message
+    });
   };
 
   const closeContextMenu = () => {
@@ -404,7 +408,13 @@ export default function ChatDetail() {
 
   // Edit/Delete functions
   const canEditDelete = (message) => {
-    return message.sender_id === currentUserId || isAdmin;
+    console.log('canEditDelete check:', {
+      currentUserId,
+      isAdmin,
+      messageSenderId: message?.sender_id,
+      result: message?.sender_id === currentUserId || isAdmin
+    });
+    return message?.sender_id === currentUserId || isAdmin;
   };
 
   const handleEditClick = (message) => {
@@ -851,64 +861,74 @@ export default function ChatDetail() {
       </Modal>
 
       {/* Custom Context Menu */}
-      {contextMenu.visible && (
+      {contextMenu.visible && contextMenu.message && (
         <Box
           position="fixed"
           left={`${contextMenu.x}px`}
           top={`${contextMenu.y}px`}
           zIndex={9999}
           bg="white"
-          boxShadow="lg"
+          boxShadow="2xl"
           borderRadius="md"
           overflow="hidden"
-          minW="180px"
+          minW="200px"
+          border="1px solid"
+          borderColor="gray.200"
         >
-          {contextMenu.message?.type === 'text' && (
+          <VStack align="stretch" spacing={0}>
+            {contextMenu.message?.type === 'text' && (
+              <Box
+                px={4}
+                py={3}
+                cursor="pointer"
+                _hover={{ bg: "gray.100" }}
+                onClick={() => handleCopyMessage(contextMenu.message.content)}
+                display="flex"
+                alignItems="center"
+                gap={3}
+              >
+                <Copy size={16} />
+                <Text fontSize="sm">Nusxalash</Text>
+              </Box>
+            )}
+            {contextMenu.message?.type === 'text' && (
+              <Box
+                px={4}
+                py={3}
+                cursor="pointer"
+                _hover={{ bg: "gray.100" }}
+                onClick={() => handleEditClick(contextMenu.message)}
+                display="flex"
+                alignItems="center"
+                gap={3}
+              >
+                <Edit2 size={16} />
+                <Text fontSize="sm">Tahrirlash</Text>
+              </Box>
+            )}
             <Box
               px={4}
-              py={2}
-              cursor="pointer"
-              _hover={{ bg: "gray.100" }}
-              onClick={() => handleCopyMessage(contextMenu.message.content)}
-              display="flex"
-              alignItems="center"
-              gap={2}
-            >
-              <Copy size={16} />
-              <Text fontSize="sm">Nusxalash</Text>
-            </Box>
-          )}
-          {contextMenu.message?.type === 'text' && canEditDelete(contextMenu.message) && (
-            <Box
-              px={4}
-              py={2}
-              cursor="pointer"
-              _hover={{ bg: "gray.100" }}
-              onClick={() => handleEditClick(contextMenu.message)}
-              display="flex"
-              alignItems="center"
-              gap={2}
-            >
-              <Edit2 size={16} />
-              <Text fontSize="sm">Tahrirlash</Text>
-            </Box>
-          )}
-          {canEditDelete(contextMenu.message) && (
-            <Box
-              px={4}
-              py={2}
+              py={3}
               cursor="pointer"
               _hover={{ bg: "red.50" }}
               onClick={() => handleDeleteClick(contextMenu.message)}
               display="flex"
               alignItems="center"
-              gap={2}
+              gap={3}
               color="red.500"
             >
               <Trash2 size={16} />
               <Text fontSize="sm">O'chirish</Text>
             </Box>
-          )}
+          </VStack>
+        </Box>
+      )}
+      
+      {/* Debug info - VAQTINCHALIK */}
+      {contextMenu.visible && (
+        <Box position="fixed" top="10px" right="10px" bg="yellow.200" p={2} borderRadius="md" zIndex={10000}>
+          <Text fontSize="xs">Context Menu Active</Text>
+          <Text fontSize="xs">X: {contextMenu.x}, Y: {contextMenu.y}</Text>
         </Box>
       )}
     </Box>
