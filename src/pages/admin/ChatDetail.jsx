@@ -121,7 +121,16 @@ export default function ChatDetail() {
 
     socket.on("newMessage", (newMsg) => {
       if (newMsg.chat_id === chatId) {
-        setMessages((prev) => [...prev, newMsg]);
+        setMessages((prev) => {
+          // Duplicate check - agar allaqachon mavjud bo'lsa qo'shmaymiz
+          const exists = prev.some(msg => msg.id === newMsg.id);
+          if (exists) {
+            console.log('Duplicate message ignored:', newMsg.id);
+            return prev;
+          }
+          console.log('New message added:', newMsg.id);
+          return [...prev, newMsg];
+        });
         scrollToBottom();
       }
     });
@@ -148,6 +157,7 @@ export default function ChatDetail() {
     });
 
     socket.on("messageDeleted", ({ messageId }) => {
+      console.log('Message deleted via socket:', messageId);
       setMessages((prev) => prev.filter(msg => msg.id !== messageId));
     });
 
@@ -296,7 +306,12 @@ export default function ChatDetail() {
 
       const sentMessage = res.data?.message || res.message;
       if (sentMessage) {
-        setMessages((prev) => [...prev, sentMessage]);
+        // Duplicate check
+        setMessages((prev) => {
+          const exists = prev.some(msg => msg.id === sentMessage.id);
+          if (exists) return prev;
+          return [...prev, sentMessage];
+        });
       }
 
       setAudioBlob(null);
@@ -390,7 +405,7 @@ export default function ChatDetail() {
     if (!editingContent.trim() || !selectedMessage) return;
 
     try {
-      const res = await api.put(`/messages/${selectedMessage.id}`, {
+      await api.put(`/messages/${selectedMessage.id}`, {
         content: editingContent.trim()
       });
 
@@ -430,6 +445,7 @@ export default function ChatDetail() {
     try {
       await api.delete(`/messages/${selectedMessage.id}`);
 
+      // Local state dan o'chirish
       setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
 
       toast({
@@ -440,6 +456,7 @@ export default function ChatDetail() {
       });
 
       onDeleteClose();
+      setSelectedMessage(null); // Cleanup
     } catch (error) {
       console.error('Delete error:', error);
       toast({
@@ -460,8 +477,6 @@ export default function ChatDetail() {
       duration: 1500,
     });
   };
-
-  const handleDeleteConfirm = async () => {
 
   if (loading) {
     return (
