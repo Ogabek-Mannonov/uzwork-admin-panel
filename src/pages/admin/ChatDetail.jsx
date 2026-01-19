@@ -65,12 +65,15 @@ export default function ChatDetail() {
   // Edit/Delete states
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [editingContent, setEditingContent] = useState("");
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, message: null });
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
 
   // Current user info
   const currentUserId = localStorage.getItem('userId');
   const isAdmin = localStorage.getItem('userRole') === 'admin';
+
+  console.log('Current user info:', { currentUserId, isAdmin });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -375,8 +378,42 @@ export default function ChatDetail() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Context Menu handlers
+  const handleContextMenu = (e, message) => {
+    e.preventDefault();
+    console.log('Right-click on message:', message);
+    console.log('Can edit/delete:', canEditDelete(message));
+    
+    // VAQTINCHALIK - har doim ko'rsatish (test uchun)
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      message: message
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu({ visible: false, x: 0, y: 0, message: null });
+  };
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => closeContextMenu();
+    if (contextMenu.visible) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu.visible]);
+
   // Edit/Delete functions
   const canEditDelete = (message) => {
+    console.log('canEditDelete check:', {
+      currentUserId,
+      isAdmin,
+      messageSenderId: message?.sender_id,
+      result: message?.sender_id === currentUserId || isAdmin
+    });
     return message?.sender_id === currentUserId || isAdmin;
   };
 
@@ -453,6 +490,7 @@ export default function ChatDetail() {
 
   const handleCopyMessage = (content) => {
     navigator.clipboard.writeText(content);
+    closeContextMenu();
     toast({
       title: "Nusxalandi",
       description: "Xabar nusxalandi",
@@ -460,8 +498,6 @@ export default function ChatDetail() {
       duration: 1500,
     });
   };
-
-  const handleDeleteConfirm = async () => {
 
   if (loading) {
     return (
@@ -586,7 +622,8 @@ export default function ChatDetail() {
                   direction="column"
                   gap={2}
                   position="relative"
-                  role="group"
+                  onContextMenu={(e) => handleContextMenu(e, msg)}
+                  cursor={canEditDelete(msg) ? "context-menu" : "default"}
                 >
                   {/* Yuboruvchi ma'lumoti */}
                   <Flex 
@@ -663,47 +700,6 @@ export default function ChatDetail() {
                         </HStack>
                       )}
                     </Box>
-
-                    {/* Three-dot Menu */}
-                    {(canEdit || canDelete) && (
-                      <Box
-                        position="absolute"
-                        right={isAdminMessage ? "auto" : "-10px"}
-                        left={isAdminMessage ? "-10px" : "auto"}
-                        top="4px"
-                        opacity={0}
-                        _groupHover={{ opacity: 1 }}
-                        transition="opacity 0.2s"
-                      >
-                        <Menu>
-                          <MenuButton
-                            as={IconButton}
-                            icon={<MoreVertical size={16} />}
-                            size="xs"
-                            variant="ghost"
-                            colorScheme={isAdminMessage ? "whiteAlpha" : "gray"}
-                            aria-label="Options"
-                          />
-                          <MenuList>
-                            {msg.type === 'text' && (
-                              <MenuItem icon={<Copy size={16} />} onClick={() => handleCopyMessage(msg.content)}>
-                                Nusxalash
-                              </MenuItem>
-                            )}
-                            {canEdit && (
-                              <MenuItem icon={<Edit2 size={16} />} onClick={() => handleEditClick(msg)}>
-                                Tahrirlash
-                              </MenuItem>
-                            )}
-                            {canDelete && (
-                              <MenuItem icon={<Trash2 size={16} />} color="red.500" onClick={() => handleDeleteClick(msg)}>
-                                O'chirish
-                              </MenuItem>
-                            )}
-                          </MenuList>
-                        </Menu>
-                      </Box>
-                    )}
                   </Box>
 
                   {/* Vaqt va status */}
@@ -863,6 +859,78 @@ export default function ChatDetail() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Custom Context Menu */}
+      {contextMenu.visible && contextMenu.message && (
+        <Box
+          position="fixed"
+          left={`${contextMenu.x}px`}
+          top={`${contextMenu.y}px`}
+          zIndex={9999}
+          bg="white"
+          boxShadow="2xl"
+          borderRadius="md"
+          overflow="hidden"
+          minW="200px"
+          border="1px solid"
+          borderColor="gray.200"
+        >
+          <VStack align="stretch" spacing={0}>
+            {contextMenu.message?.type === 'text' && (
+              <Box
+                px={4}
+                py={3}
+                cursor="pointer"
+                _hover={{ bg: "gray.100" }}
+                onClick={() => handleCopyMessage(contextMenu.message.content)}
+                display="flex"
+                alignItems="center"
+                gap={3}
+              >
+                <Copy size={16} />
+                <Text fontSize="sm">Nusxalash</Text>
+              </Box>
+            )}
+            {contextMenu.message?.type === 'text' && (
+              <Box
+                px={4}
+                py={3}
+                cursor="pointer"
+                _hover={{ bg: "gray.100" }}
+                onClick={() => handleEditClick(contextMenu.message)}
+                display="flex"
+                alignItems="center"
+                gap={3}
+              >
+                <Edit2 size={16} />
+                <Text fontSize="sm">Tahrirlash</Text>
+              </Box>
+            )}
+            <Box
+              px={4}
+              py={3}
+              cursor="pointer"
+              _hover={{ bg: "red.50" }}
+              onClick={() => handleDeleteClick(contextMenu.message)}
+              display="flex"
+              alignItems="center"
+              gap={3}
+              color="red.500"
+            >
+              <Trash2 size={16} />
+              <Text fontSize="sm">O'chirish</Text>
+            </Box>
+          </VStack>
+        </Box>
+      )}
+      
+      {/* Debug info - VAQTINCHALIK */}
+      {contextMenu.visible && (
+        <Box position="fixed" top="10px" right="10px" bg="yellow.200" p={2} borderRadius="md" zIndex={10000}>
+          <Text fontSize="xs">Context Menu Active</Text>
+          <Text fontSize="xs">X: {contextMenu.x}, Y: {contextMenu.y}</Text>
+        </Box>
+      )}
     </Box>
   );
 }
