@@ -21,8 +21,21 @@ import {
   useToast,
   Progress,
   Tooltip,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
+  Textarea,
 } from "@chakra-ui/react";
-import { ArrowLeft, Send, Paperclip, AlertTriangle, Mic, Square, Play, Pause } from "lucide-react";
+import { ArrowLeft, Send, Paperclip, AlertTriangle, Mic, Play, Pause, MoreVertical, Edit2, Trash2, Copy } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import api from "../../lib/api";
 import socket from "../../utils/socket";
@@ -49,6 +62,16 @@ export default function ChatDetail() {
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const audioRefs = useRef({});
 
+  // Edit/Delete states
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [editingContent, setEditingContent] = useState("");
+  const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+
+  // Current user info
+  const currentUserId = localStorage.getItem('userId');
+  const isAdmin = localStorage.getItem('userRole') === 'admin';
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -62,7 +85,6 @@ export default function ChatDetail() {
         const res = await api(`/messages/${chatId}`);
         console.log("Backenddan to'liq response:", res.data);
 
-        // Xabarlar
         let fetchedMessages = [];
         if (res.data?.messages) {
           fetchedMessages = res.data.messages;
@@ -74,7 +96,6 @@ export default function ChatDetail() {
 
         setMessages(fetchedMessages || []);
 
-        // Client va freelancer ma'lumotlarini saqlash
         const clientData = res.data?.client || null;
         const freelancerData = res.data?.freelancer || null;
 
@@ -83,10 +104,6 @@ export default function ChatDetail() {
           freelancer: freelancerData
         });
 
-        console.log("Client info:", clientData);
-        console.log("Freelancer info:", freelancerData);
-        console.log("Client full name:", clientData ? `${clientData.first_name || ''} ${clientData.last_name || ''}`.trim() : 'N/A');
-        console.log("Freelancer full name:", freelancerData ? `${freelancerData.first_name || ''} ${freelancerData.last_name || ''}`.trim() : 'N/A');
       } catch (err) {
         console.error("Ma'lumotlarni olishda xato:", err);
         toast({
@@ -119,9 +136,26 @@ export default function ChatDetail() {
       }
     });
 
+    // Edit va Delete events
+    socket.on("messageEdited", ({ messageId, content, updated_at }) => {
+      setMessages((prev) =>
+        prev.map(msg =>
+          msg.id === messageId
+            ? { ...msg, content, is_edited: true, updated_at }
+            : msg
+        )
+      );
+    });
+
+    socket.on("messageDeleted", ({ messageId }) => {
+      setMessages((prev) => prev.filter(msg => msg.id !== messageId));
+    });
+
     return () => {
       socket.off("newMessage");
       socket.off("messagesRead");
+      socket.off("messageEdited");
+      socket.off("messageDeleted");
       socket.disconnect();
     };
   }, [chatId, toast]);
@@ -137,9 +171,6 @@ export default function ChatDetail() {
         type: "text",
       });
 
-      console.log("Yuborilgan xabar response:", res.data);
-
-      // Yangi xabarni qo'shish
       const sentMessage = res.data?.data?.message || res.data?.message;
       if (sentMessage) {
         setMessages((prev) => [...prev, sentMessage]);
@@ -189,7 +220,6 @@ export default function ChatDetail() {
       setIsRecording(true);
       setRecordingTime(0);
 
-      // Timer
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -241,15 +271,13 @@ export default function ChatDetail() {
 
     setSending(true);
     try {
-      // FormData yaratish
       const formData = new FormData();
       formData.append('voice', audioBlob, 'voice-message.webm');
 
-      // File upload endpoint
       const uploadRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/upload/voice`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`, // ✅ Token qaytarildi
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
         },
         body: formData,
       });
@@ -262,7 +290,6 @@ export default function ChatDetail() {
       const uploadData = await uploadRes.json();
       const voiceUrl = uploadData.data.url;
 
-      // Voice message yuborish
       const res = await api.post(`/messages/${chatId}/voice`, {
         voice_url: voiceUrl,
       });
@@ -272,7 +299,6 @@ export default function ChatDetail() {
         setMessages((prev) => [...prev, sentMessage]);
       }
 
-      // Reset
       setAudioBlob(null);
       setRecordingTime(0);
       scrollToBottom();
@@ -297,10 +323,8 @@ export default function ChatDetail() {
   };
 
   const toggleAudioPlayback = (messageId, audioUrl) => {
-    // URL ni to'g'rilash
     let fullAudioUrl = audioUrl;
     
-    // Agar relative URL bo'lsa, to'liq URL ga aylantirish
     if (audioUrl && !audioUrl.startsWith('http')) {
       const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       fullAudioUrl = `${baseURL}${audioUrl}`;
@@ -316,7 +340,6 @@ export default function ChatDetail() {
       
       newAudio.onerror = (e) => {
         console.error('❌ Audio playback error:', e);
-        console.error('Audio URL:', fullAudioUrl);
         toast({
           title: "Xato",
           description: "Audio faylni yuklab bo'lmadi",
@@ -331,12 +354,6 @@ export default function ChatDetail() {
 
       newAudio.play().catch(err => {
         console.error('Play error:', err);
-        toast({
-          title: "Xato",
-          description: "Audio ni ijro etib bo'lmadi",
-          status: "error",
-          duration: 3000,
-        });
       });
       setPlayingAudioId(messageId);
     } else {
@@ -356,6 +373,92 @@ export default function ChatDetail() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Edit/Delete functions
+  const canEditDelete = (message) => {
+    return message.sender_id === currentUserId || isAdmin;
+  };
+
+  const handleEditClick = (message) => {
+    setSelectedMessage(message);
+    setEditingContent(message.content);
+    onEditOpen();
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingContent.trim() || !selectedMessage) return;
+
+    try {
+      await api.put(`/messages/${selectedMessage.id}`, {
+        content: editingContent.trim()
+      });
+
+      setMessages(prev => prev.map(msg =>
+        msg.id === selectedMessage.id
+          ? { ...msg, content: editingContent.trim(), is_edited: true }
+          : msg
+      ));
+
+      toast({
+        title: "O'zgartirildi",
+        description: "Xabar muvaffaqiyatli o'zgartirildi",
+        status: "success",
+        duration: 2000,
+      });
+
+      onEditClose();
+    } catch (error) {
+      console.error('Edit error:', error);
+      toast({
+        title: "Xato",
+        description: "Xabarni o'zgartirib bo'lmadi",
+        status: "error",
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleDeleteClick = (message) => {
+    setSelectedMessage(message);
+    onDeleteOpen();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedMessage) return;
+
+    try {
+      await api.delete(`/messages/${selectedMessage.id}`);
+
+      setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
+
+      toast({
+        title: "O'chirildi",
+        description: "Xabar o'chirildi",
+        status: "success",
+        duration: 2000,
+      });
+
+      onDeleteClose();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: "Xato",
+        description: "Xabarni o'chirib bo'lmadi",
+        status: "error",
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleCopyMessage = (content) => {
+    navigator.clipboard.writeText(content);
+    toast({
+      title: "Nusxalandi",
+      description: "Xabar nusxalandi",
+      status: "info",
+      duration: 1500,
+    });
   };
 
   if (loading) {
@@ -380,7 +483,6 @@ export default function ChatDetail() {
               <Box>
                 <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
                 <Flex align="center" gap={6} mt={2}>
-                  {/* Client */}
                   {chatInfo.client && (
                     <Flex align="center" gap={2}>
                       <Avatar
@@ -403,7 +505,6 @@ export default function ChatDetail() {
                     </Flex>
                   )}
 
-                  {/* Freelancer */}
                   {chatInfo.freelancer && (
                     <Flex align="center" gap={2}>
                       <Avatar
@@ -444,12 +545,10 @@ export default function ChatDetail() {
             </Text>
           ) : (
             messages.map((msg) => {
-              // Yuboruvchini aniqlash - sender_role dan
               let sender = null;
               let senderName = "Unknown";
               let avatarBg = "gray.500";
 
-              // Backend dan kelgan sender_role orqali aniqlash
               if (msg.sender_role === 'admin') {
                 senderName = "Admin";
                 avatarBg = "blue.500";
@@ -474,6 +573,8 @@ export default function ChatDetail() {
               const isAdminMessage = msg.sender_role === 'admin';
               const avatarUrl = sender?.avatar_url || msg.sender_avatar;
               const username = sender?.username || msg.sender_username;
+              const canEdit = msg.type === 'text' && canEditDelete(msg);
+              const canDelete = canEditDelete(msg);
 
               return (
                 <Flex
@@ -482,6 +583,8 @@ export default function ChatDetail() {
                   maxW="70%"
                   direction="column"
                   gap={2}
+                  position="relative"
+                  role="group"
                 >
                   {/* Yuboruvchi ma'lumoti */}
                   <Flex 
@@ -517,38 +620,87 @@ export default function ChatDetail() {
                   </Flex>
 
                   {/* Xabar matni */}
-                  <Box
-                    bg={isAdminMessage ? "blue.500" : "white"}
-                    color={isAdminMessage ? "white" : "black"}
-                    p={4}
-                    borderRadius="lg"
-                    boxShadow="md"
-                  >
-                    {/* Text xabar */}
-                    {msg.type === 'text' && <Text>{msg.content}</Text>}
-                    
-                    {/* Voice xabar */}
-                    {msg.type === 'voice' && msg.file_url && (
-                      <HStack spacing={3}>
-                        <IconButton
-                          icon={playingAudioId === msg.id ? <Pause size={18} /> : <Play size={18} />}
-                          size="sm"
-                          colorScheme={isAdminMessage ? "whiteAlpha" : "blue"}
-                          onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
-                          aria-label="Play/Pause"
-                        />
-                        <Text fontSize="sm">Ovozli xabar</Text>
-                      </HStack>
-                    )}
+                  <Box position="relative">
+                    <Box
+                      bg={isAdminMessage ? "blue.500" : "white"}
+                      color={isAdminMessage ? "white" : "black"}
+                      p={4}
+                      borderRadius="lg"
+                      boxShadow="md"
+                    >
+                      {msg.type === 'text' && (
+                        <Box>
+                          <Text>{msg.content}</Text>
+                          {msg.is_edited && (
+                            <Text fontSize="xs" color={isAdminMessage ? "whiteAlpha.700" : "gray.500"} mt={1}>
+                              (tahrirlangan)
+                            </Text>
+                          )}
+                        </Box>
+                      )}
+                      
+                      {msg.type === 'voice' && msg.file_url && (
+                        <HStack spacing={3}>
+                          <IconButton
+                            icon={playingAudioId === msg.id ? <Pause size={18} /> : <Play size={18} />}
+                            size="sm"
+                            colorScheme={isAdminMessage ? "whiteAlpha" : "blue"}
+                            onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
+                            aria-label="Play/Pause"
+                          />
+                          <Text fontSize="sm">Ovozli xabar</Text>
+                        </HStack>
+                      )}
 
-                    {/* File xabar */}
-                    {msg.type === 'file' && msg.file_url && (
-                      <HStack mt={2}>
-                        <Paperclip size={16} />
-                        <Text fontSize="sm" color={isAdminMessage ? "blue.100" : "blue.600"}>
-                          Fayl: {msg.file_url.split('/').pop()}
-                        </Text>
-                      </HStack>
+                      {msg.type === 'file' && msg.file_url && (
+                        <HStack mt={2}>
+                          <Paperclip size={16} />
+                          <Text fontSize="sm" color={isAdminMessage ? "blue.100" : "blue.600"}>
+                            Fayl: {msg.file_url.split('/').pop()}
+                          </Text>
+                        </HStack>
+                      )}
+                    </Box>
+
+                    {/* Context Menu */}
+                    {(canEdit || canDelete) && (
+                      <Box
+                        position="absolute"
+                        right={isAdminMessage ? "auto" : "-40px"}
+                        left={isAdminMessage ? "-40px" : "auto"}
+                        top="50%"
+                        transform="translateY(-50%)"
+                        opacity={0}
+                        _groupHover={{ opacity: 1 }}
+                        transition="opacity 0.2s"
+                      >
+                        <Menu>
+                          <MenuButton
+                            as={IconButton}
+                            icon={<MoreVertical size={16} />}
+                            size="xs"
+                            variant="ghost"
+                            colorScheme="gray"
+                          />
+                          <MenuList>
+                            {msg.type === 'text' && (
+                              <MenuItem icon={<Copy size={16} />} onClick={() => handleCopyMessage(msg.content)}>
+                                Nusxalash
+                              </MenuItem>
+                            )}
+                            {canEdit && (
+                              <MenuItem icon={<Edit2 size={16} />} onClick={() => handleEditClick(msg)}>
+                                Tahrirlash
+                              </MenuItem>
+                            )}
+                            {canDelete && (
+                              <MenuItem icon={<Trash2 size={16} />} color="red.500" onClick={() => handleDeleteClick(msg)}>
+                                O'chirish
+                              </MenuItem>
+                            )}
+                          </MenuList>
+                        </Menu>
+                      </Box>
                     )}
                   </Box>
 
@@ -574,12 +726,11 @@ export default function ChatDetail() {
       {/* Xabar yozish */}
       <Card mt={4}>
         <CardBody>
-          {/* Agar recording bo'lsa */}
           {isRecording && (
             <VStack spacing={3} mb={4}>
               <HStack justify="space-between" w="full">
                 <HStack>
-                  <Box w={3} h={3} bg="red.500" borderRadius="full" animation="pulse 1.5s infinite" />
+                  <Box w={3} h={3} bg="red.500" borderRadius="full" />
                   <Text fontWeight="medium">Yozilmoqda...</Text>
                 </HStack>
                 <Text fontWeight="bold" color="red.500">{formatTime(recordingTime)}</Text>
@@ -596,7 +747,6 @@ export default function ChatDetail() {
             </VStack>
           )}
 
-          {/* Agar audio blob bor bo'lsa (preview) */}
           {audioBlob && !isRecording && (
             <HStack spacing={3} mb={4} p={3} bg="gray.50" borderRadius="md">
               <IconButton
@@ -619,7 +769,6 @@ export default function ChatDetail() {
             </HStack>
           )}
 
-          {/* Text input */}
           {!isRecording && !audioBlob && (
             <InputGroup>
               <Input
@@ -663,6 +812,55 @@ export default function ChatDetail() {
           )}
         </CardBody>
       </Card>
+
+      {/* Edit Modal */}
+      <Modal isOpen={isEditOpen} onClose={onEditClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Xabarni tahrirlash</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Textarea
+              value={editingContent}
+              onChange={(e) => setEditingContent(e.target.value)}
+              placeholder="Yangi matn kiriting..."
+              rows={4}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onEditClose}>
+              Bekor qilish
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={handleEditSubmit}
+              isDisabled={!editingContent.trim()}
+            >
+              Saqlash
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Xabarni o'chirish</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text>Ushbu xabarni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.</Text>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onDeleteClose}>
+              Bekor qilish
+            </Button>
+            <Button colorScheme="red" onClick={handleDeleteConfirm}>
+              O'chirish
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
