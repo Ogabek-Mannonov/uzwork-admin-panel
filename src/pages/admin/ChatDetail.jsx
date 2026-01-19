@@ -297,24 +297,56 @@ export default function ChatDetail() {
   };
 
   const toggleAudioPlayback = (messageId, audioUrl) => {
+    // URL ni to'g'rilash
+    let fullAudioUrl = audioUrl;
+    
+    // Agar relative URL bo'lsa, to'liq URL ga aylantirish
+    if (audioUrl && !audioUrl.startsWith('http')) {
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      fullAudioUrl = `${baseURL}${audioUrl}`;
+    }
+
+    console.log('🎵 Playing audio:', fullAudioUrl);
+
     const audio = audioRefs.current[messageId];
 
     if (!audio) {
-      const newAudio = new Audio(audioUrl);
+      const newAudio = new Audio(fullAudioUrl);
       audioRefs.current[messageId] = newAudio;
       
+      newAudio.onerror = (e) => {
+        console.error('❌ Audio playback error:', e);
+        console.error('Audio URL:', fullAudioUrl);
+        toast({
+          title: "Xato",
+          description: "Audio faylni yuklab bo'lmadi",
+          status: "error",
+          duration: 3000,
+        });
+      };
+
       newAudio.onended = () => {
         setPlayingAudioId(null);
       };
 
-      newAudio.play();
+      newAudio.play().catch(err => {
+        console.error('Play error:', err);
+        toast({
+          title: "Xato",
+          description: "Audio ni ijro etib bo'lmadi",
+          status: "error",
+          duration: 3000,
+        });
+      });
       setPlayingAudioId(messageId);
     } else {
       if (playingAudioId === messageId) {
         audio.pause();
         setPlayingAudioId(null);
       } else {
-        audio.play();
+        audio.play().catch(err => {
+          console.error('Play error:', err);
+        });
         setPlayingAudioId(messageId);
       }
     }

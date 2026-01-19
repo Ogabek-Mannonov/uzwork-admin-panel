@@ -1,5 +1,14 @@
 // src/lib/api.js
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+// ⚠️ BU YERGA SIZNING RENDER BACKEND URL NI YOZING!
+const PRODUCTION_API_URL = "https://uzwork-backend.onrender.com"; // ← O'zgartiring!
+
+const API_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.PROD 
+    ? PRODUCTION_API_URL
+    : "http://localhost:3000");
+
+console.log('🌐 API URL:', API_URL);
+console.log('🔧 Environment:', import.meta.env.MODE);
 
 const getToken = () => localStorage.getItem("accessToken");
 
