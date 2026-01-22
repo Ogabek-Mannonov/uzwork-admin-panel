@@ -67,10 +67,18 @@ export default function ChatDetail() {
   const [editingContent, setEditingContent] = useState("");
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const [contextMenu, setContextMenu] = useState({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    message: null,
+  });
 
   // Current user info
   const currentUserId = localStorage.getItem('userId');
   const isAdmin = localStorage.getItem('userRole') === 'admin';
+
+  const normalizeId = (id) => (id == null ? null : String(id));
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -123,7 +131,8 @@ export default function ChatDetail() {
       if (newMsg.chat_id === chatId) {
         setMessages((prev) => {
           // Duplicate check - agar allaqachon mavjud bo'lsa qo'shmaymiz
-          const exists = prev.some(msg => msg.id === newMsg.id);
+          const newMsgId = normalizeId(newMsg.id);
+          const exists = prev.some(msg => normalizeId(msg.id) === newMsgId);
           if (exists) {
             console.log('Duplicate message ignored:', newMsg.id);
             return prev;
@@ -147,9 +156,10 @@ export default function ChatDetail() {
 
     // Edit va Delete events
     socket.on("messageEdited", ({ messageId, content, updated_at }) => {
+      const editedId = normalizeId(messageId);
       setMessages((prev) =>
         prev.map(msg =>
-          msg.id === messageId
+          normalizeId(msg.id) === editedId
             ? { ...msg, content, is_edited: true, updated_at }
             : msg
         )
@@ -158,7 +168,8 @@ export default function ChatDetail() {
 
     socket.on("messageDeleted", ({ messageId }) => {
       console.log('Message deleted via socket:', messageId);
-      setMessages((prev) => prev.filter(msg => msg.id !== messageId));
+      const deleteId = normalizeId(messageId);
+      setMessages((prev) => prev.filter(msg => normalizeId(msg.id) !== deleteId));
     });
 
     return () => {
@@ -183,7 +194,14 @@ export default function ChatDetail() {
 
       const sentMessage = res.data?.data?.message || res.data?.message;
       if (sentMessage) {
-        setMessages((prev) => [...prev, sentMessage]);
+        setMessages((prev) => {
+          const sentId = normalizeId(sentMessage.id);
+          const exists = prev.some(msg => normalizeId(msg.id) === sentId);
+          if (exists) {
+            return prev;
+          }
+          return [...prev, sentMessage];
+        });
       }
       
       setNewMessage("");
@@ -308,7 +326,8 @@ export default function ChatDetail() {
       if (sentMessage) {
         // Duplicate check
         setMessages((prev) => {
-          const exists = prev.some(msg => msg.id === sentMessage.id);
+          const sentId = normalizeId(sentMessage.id);
+          const exists = prev.some(msg => normalizeId(msg.id) === sentId);
           if (exists) return prev;
           return [...prev, sentMessage];
         });
@@ -446,7 +465,8 @@ export default function ChatDetail() {
       await api.delete(`/messages/${selectedMessage.id}`);
 
       // Local state dan o'chirish
-      setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
+      const deleteId = normalizeId(selectedMessage.id);
+      setMessages(prev => prev.filter(msg => normalizeId(msg.id) !== deleteId));
 
       toast({
         title: "O'chirildi",
@@ -478,7 +498,19 @@ export default function ChatDetail() {
     });
   };
 
-  const handleDeleteConfirm = async () => {
+  const openContextMenu = (event, message) => {
+    event.preventDefault();
+    setContextMenu({
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      message,
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false, message: null }));
+  };
 
   if (loading) {
     return (
@@ -639,7 +671,7 @@ export default function ChatDetail() {
                   </Flex>
 
                   {/* Xabar matni */}
-                  <Box position="relative">
+                  <Box position="relative" onContextMenu={(event) => openContextMenu(event, msg)}>
                     <Box
                       bg={isAdminMessage ? "blue.500" : "white"}
                       color={isAdminMessage ? "white" : "black"}
@@ -880,6 +912,52 @@ export default function ChatDetail() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      <Menu isOpen={contextMenu.isOpen} onClose={closeContextMenu}>
+        <MenuButton as={Box} position="fixed" top={0} left={0} w={0} h={0} />
+        <MenuList
+          position="fixed"
+          top={`${contextMenu.y}px`}
+          left={`${contextMenu.x}px`}
+          zIndex={1500}
+          minW="200px"
+        >
+          {contextMenu.message?.type === 'text' && (
+            <MenuItem
+              icon={<Copy size={16} />}
+              onClick={() => {
+                handleCopyMessage(contextMenu.message.content);
+                closeContextMenu();
+              }}
+            >
+              Nusxalash
+            </MenuItem>
+          )}
+          {contextMenu.message && contextMenu.message.type === 'text' && canEditDelete(contextMenu.message) && (
+            <MenuItem
+              icon={<Edit2 size={16} />}
+              onClick={() => {
+                handleEditClick(contextMenu.message);
+                closeContextMenu();
+              }}
+            >
+              Tahrirlash
+            </MenuItem>
+          )}
+          {contextMenu.message && canEditDelete(contextMenu.message) && (
+            <MenuItem
+              icon={<Trash2 size={16} />}
+              color="red.500"
+              onClick={() => {
+                handleDeleteClick(contextMenu.message);
+                closeContextMenu();
+              }}
+            >
+              O'chirish
+            </MenuItem>
+          )}
+        </MenuList>
+      </Menu>
     </Box>
   );
 }
