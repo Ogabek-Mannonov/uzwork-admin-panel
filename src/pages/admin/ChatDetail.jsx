@@ -411,7 +411,7 @@ export default function ChatDetail() {
 
   // Edit/Delete functions
   const canEditDelete = (message) => {
-    return message?.sender_id === currentUserId || isAdmin;
+    return normalizeId(message?.sender_id) === normalizeId(currentUserId) || isAdmin;
   };
 
   const handleEditClick = (message) => {
