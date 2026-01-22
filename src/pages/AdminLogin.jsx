@@ -48,6 +48,12 @@ export default function AdminLogin() {
       // Tokenlarni saqlash
       localStorage.setItem("accessToken", data.data.accessToken);
       localStorage.setItem("refreshToken", data.data.refreshToken || ""); // agar refresh bo‘lsa
+      if (data.data?.user?.id != null) {
+        localStorage.setItem("userId", String(data.data.user.id));
+      }
+      if (data.data?.user?.role) {
+        localStorage.setItem("userRole", data.data.user.role);
+      }
 
       // Role tekshiruvi (backenddan qaytgan user role)
       if (data.data.user.role !== "admin") {

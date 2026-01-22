@@ -109,7 +109,8 @@ export default function ChatDetail() {
   const role = String(roleRaw).toLowerCase();
 
   // admin, superadmin, administrator -> hammasi admin
-  const isAdmin = role.includes("admin");
+  const isAdmin =
+    role.includes("admin") || window.location.pathname.startsWith("/admin");
 
   // sender id turli backend formatlaridan topiladi
   const getSenderId = (m) =>
