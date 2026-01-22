@@ -94,14 +94,24 @@ export default function ChatDetail() {
     message: null,
   });
 
-  // ===== Current user info (FIXED) =====
+  // ====== FIXED: Current user info / role ======
   const normalizeId = (id) => (id == null ? null : String(id));
 
-  // normalize qilib qo'yamiz
   const currentUserId = normalizeId(localStorage.getItem("userId"));
-  const isAdmin = localStorage.getItem("userRole") === "admin";
 
-  // turli backend formatlar uchun sender id ni topish
+  // role turli keylarda bo'lishi mumkin: userRole / role / user_role
+  const roleRaw =
+    localStorage.getItem("userRole") ||
+    localStorage.getItem("role") ||
+    localStorage.getItem("user_role") ||
+    "";
+
+  const role = String(roleRaw).toLowerCase();
+
+  // admin, superadmin, administrator -> hammasi admin
+  const isAdmin = role.includes("admin");
+
+  // sender id turli backend formatlaridan topiladi
   const getSenderId = (m) =>
     normalizeId(
       m?.sender_id ??
@@ -111,13 +121,6 @@ export default function ChatDetail() {
         m?.admin_id ??
         m?.adminId
     );
-
-  // Admin panel: admin hammasini edit/delete qila oladi
-  const canEditDelete = (message) => {
-    if (!message) return false;
-    if (isAdmin) return true;
-    return getSenderId(message) === currentUserId;
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -168,6 +171,7 @@ export default function ChatDetail() {
     socket.on("newMessage", (newMsg) => {
       if (newMsg.chat_id === chatId) {
         setMessages((prev) => {
+          // Duplicate check - agar allaqachon mavjud bo'lsa qo'shmaymiz
           const newMsgId = normalizeId(newMsg.id);
           const exists = prev.some((msg) => normalizeId(msg.id) === newMsgId);
           if (exists) {
@@ -191,6 +195,7 @@ export default function ChatDetail() {
       }
     });
 
+    // Edit va Delete events
     socket.on("messageEdited", ({ messageId, content, updated_at }) => {
       const editedId = normalizeId(messageId);
       setMessages((prev) =>
@@ -233,7 +238,9 @@ export default function ChatDetail() {
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
           const exists = prev.some((msg) => normalizeId(msg.id) === sentId);
-          if (exists) return prev;
+          if (exists) {
+            return prev;
+          }
           return [...prev, sentMessage];
         });
       }
@@ -361,6 +368,7 @@ export default function ChatDetail() {
 
       const sentMessage = res.data?.message || res.message;
       if (sentMessage) {
+        // Duplicate check
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
           const exists = prev.some((msg) => normalizeId(msg.id) === sentId);
@@ -445,7 +453,17 @@ export default function ChatDetail() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Edit/Delete handlers
+  // ====== FIXED: Edit/Delete functions ======
+  const canEditDelete = (message) => {
+    if (!message) return false;
+
+    // ✅ Admin bo'lsa hammasiga ruxsat
+    if (isAdmin) return true;
+
+    // Oddiy user faqat o'zi yuborganiga
+    return getSenderId(message) === currentUserId;
+  };
+
   const handleEditClick = (message) => {
     setSelectedMessage(message);
     setEditingContent(message.content);
@@ -498,6 +516,7 @@ export default function ChatDetail() {
     try {
       await api.delete(`/messages/${selectedMessage.id}`);
 
+      // Local state dan o'chirish
       const deleteId = normalizeId(selectedMessage.id);
       setMessages((prev) => prev.filter((msg) => normalizeId(msg.id) !== deleteId));
 
@@ -509,7 +528,7 @@ export default function ChatDetail() {
       });
 
       onDeleteClose();
-      setSelectedMessage(null);
+      setSelectedMessage(null); // Cleanup
     } catch (error) {
       console.error("Delete error:", error);
       toast({
@@ -559,7 +578,7 @@ export default function ChatDetail() {
       h="calc(100vh - 100px)"
       display="flex"
       flexDirection="column"
-      onClick={closeContextMenu} // ✅ tashqariga bossa menu yopiladi
+      onClick={closeContextMenu} // ✅ tashqariga bosganda menu yopiladi
     >
       {/* Header */}
       <Card mb={4}>
@@ -671,8 +690,6 @@ export default function ChatDetail() {
               const isAdminMessage = msg.sender_role === "admin";
               const avatarUrl = sender?.avatar_url || msg.sender_avatar;
               const username = sender?.username || msg.sender_username;
-
-              // ✅ endi admin hamma narsani edit/delete qila oladi
               const canEdit = msg.type === "text" && canEditDelete(msg);
               const canDelete = canEditDelete(msg);
 
@@ -961,7 +978,7 @@ export default function ChatDetail() {
         </ModalContent>
       </Modal>
 
-      {/* RIGHT-CLICK CONTEXT MENU (Telegramdek) */}
+      {/* RIGHT-CLICK CONTEXT MENU */}
       <Menu isOpen={contextMenu.isOpen} onClose={closeContextMenu}>
         <MenuButton as={Box} position="fixed" top={0} left={0} w={0} h={0} />
         <MenuList
