@@ -35,7 +35,19 @@ import {
   useDisclosure,
   Textarea,
 } from "@chakra-ui/react";
-import { ArrowLeft, Send, Paperclip, AlertTriangle, Mic, Play, Pause, MoreVertical, Edit2, Trash2, Copy } from "lucide-react";
+import {
+  ArrowLeft,
+  Send,
+  Paperclip,
+  AlertTriangle,
+  Mic,
+  Play,
+  Pause,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  Copy,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import api from "../../lib/api";
 import socket from "../../utils/socket";
@@ -65,8 +77,16 @@ export default function ChatDetail() {
   // Edit/Delete states
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [editingContent, setEditingContent] = useState("");
-  const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
-  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const {
+    isOpen: isEditOpen,
+    onOpen: onEditOpen,
+    onClose: onEditClose,
+  } = useDisclosure();
+  const {
+    isOpen: isDeleteOpen,
+    onOpen: onDeleteOpen,
+    onClose: onDeleteClose,
+  } = useDisclosure();
   const [contextMenu, setContextMenu] = useState({
     isOpen: false,
     x: 0,
@@ -74,11 +94,30 @@ export default function ChatDetail() {
     message: null,
   });
 
-  // Current user info
-  const currentUserId = localStorage.getItem('userId');
-  const isAdmin = localStorage.getItem('userRole') === 'admin';
-
+  // ===== Current user info (FIXED) =====
   const normalizeId = (id) => (id == null ? null : String(id));
+
+  // normalize qilib qo'yamiz
+  const currentUserId = normalizeId(localStorage.getItem("userId"));
+  const isAdmin = localStorage.getItem("userRole") === "admin";
+
+  // turli backend formatlar uchun sender id ni topish
+  const getSenderId = (m) =>
+    normalizeId(
+      m?.sender_id ??
+        m?.senderId ??
+        m?.user_id ??
+        m?.userId ??
+        m?.admin_id ??
+        m?.adminId
+    );
+
+  // Admin panel: admin hammasini edit/delete qila oladi
+  const canEditDelete = (message) => {
+    if (!message) return false;
+    if (isAdmin) return true;
+    return getSenderId(message) === currentUserId;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,9 +148,8 @@ export default function ChatDetail() {
 
         setChatInfo({
           client: clientData,
-          freelancer: freelancerData
+          freelancer: freelancerData,
         });
-
       } catch (err) {
         console.error("Ma'lumotlarni olishda xato:", err);
         toast({
@@ -130,14 +168,13 @@ export default function ChatDetail() {
     socket.on("newMessage", (newMsg) => {
       if (newMsg.chat_id === chatId) {
         setMessages((prev) => {
-          // Duplicate check - agar allaqachon mavjud bo'lsa qo'shmaymiz
           const newMsgId = normalizeId(newMsg.id);
-          const exists = prev.some(msg => normalizeId(msg.id) === newMsgId);
+          const exists = prev.some((msg) => normalizeId(msg.id) === newMsgId);
           if (exists) {
-            console.log('Duplicate message ignored:', newMsg.id);
+            console.log("Duplicate message ignored:", newMsg.id);
             return prev;
           }
-          console.log('New message added:', newMsg.id);
+          console.log("New message added:", newMsg.id);
           return [...prev, newMsg];
         });
         scrollToBottom();
@@ -154,11 +191,10 @@ export default function ChatDetail() {
       }
     });
 
-    // Edit va Delete events
     socket.on("messageEdited", ({ messageId, content, updated_at }) => {
       const editedId = normalizeId(messageId);
       setMessages((prev) =>
-        prev.map(msg =>
+        prev.map((msg) =>
           normalizeId(msg.id) === editedId
             ? { ...msg, content, is_edited: true, updated_at }
             : msg
@@ -167,9 +203,9 @@ export default function ChatDetail() {
     });
 
     socket.on("messageDeleted", ({ messageId }) => {
-      console.log('Message deleted via socket:', messageId);
+      console.log("Message deleted via socket:", messageId);
       const deleteId = normalizeId(messageId);
-      setMessages((prev) => prev.filter(msg => normalizeId(msg.id) !== deleteId));
+      setMessages((prev) => prev.filter((msg) => normalizeId(msg.id) !== deleteId));
     });
 
     return () => {
@@ -196,14 +232,12 @@ export default function ChatDetail() {
       if (sentMessage) {
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
-          const exists = prev.some(msg => normalizeId(msg.id) === sentId);
-          if (exists) {
-            return prev;
-          }
+          const exists = prev.some((msg) => normalizeId(msg.id) === sentId);
+          if (exists) return prev;
           return [...prev, sentMessage];
         });
       }
-      
+
       setNewMessage("");
       scrollToBottom();
     } catch (err) {
@@ -227,7 +261,7 @@ export default function ChatDetail() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -239,9 +273,9 @@ export default function ChatDetail() {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         setAudioBlob(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorder.start();
@@ -249,7 +283,7 @@ export default function ChatDetail() {
       setRecordingTime(0);
 
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime((prev) => prev + 1);
       }, 1000);
 
       toast({
@@ -284,7 +318,7 @@ export default function ChatDetail() {
       setAudioBlob(null);
       setRecordingTime(0);
       clearInterval(timerRef.current);
-      
+
       toast({
         title: "Bekor qilindi",
         description: "Ovozli xabar bekor qilindi",
@@ -300,19 +334,22 @@ export default function ChatDetail() {
     setSending(true);
     try {
       const formData = new FormData();
-      formData.append('voice', audioBlob, 'voice-message.webm');
+      formData.append("voice", audioBlob, "voice-message.webm");
 
-      const uploadRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/upload/voice`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: formData,
-      });
+      const uploadRes = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/voice`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+          body: formData,
+        }
+      );
 
       if (!uploadRes.ok) {
         const errorData = await uploadRes.json();
-        throw new Error(errorData.message || 'Upload xatosi');
+        throw new Error(errorData.message || "Upload xatosi");
       }
 
       const uploadData = await uploadRes.json();
@@ -324,10 +361,9 @@ export default function ChatDetail() {
 
       const sentMessage = res.data?.message || res.message;
       if (sentMessage) {
-        // Duplicate check
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
-          const exists = prev.some(msg => normalizeId(msg.id) === sentId);
+          const exists = prev.some((msg) => normalizeId(msg.id) === sentId);
           if (exists) return prev;
           return [...prev, sentMessage];
         });
@@ -358,22 +394,22 @@ export default function ChatDetail() {
 
   const toggleAudioPlayback = (messageId, audioUrl) => {
     let fullAudioUrl = audioUrl;
-    
-    if (audioUrl && !audioUrl.startsWith('http')) {
-      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+    if (audioUrl && !audioUrl.startsWith("http")) {
+      const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3000";
       fullAudioUrl = `${baseURL}${audioUrl}`;
     }
 
-    console.log('🎵 Playing audio:', fullAudioUrl);
+    console.log("🎵 Playing audio:", fullAudioUrl);
 
     const audio = audioRefs.current[messageId];
 
     if (!audio) {
       const newAudio = new Audio(fullAudioUrl);
       audioRefs.current[messageId] = newAudio;
-      
+
       newAudio.onerror = (e) => {
-        console.error('❌ Audio playback error:', e);
+        console.error("❌ Audio playback error:", e);
         toast({
           title: "Xato",
           description: "Audio faylni yuklab bo'lmadi",
@@ -386,8 +422,8 @@ export default function ChatDetail() {
         setPlayingAudioId(null);
       };
 
-      newAudio.play().catch(err => {
-        console.error('Play error:', err);
+      newAudio.play().catch((err) => {
+        console.error("Play error:", err);
       });
       setPlayingAudioId(messageId);
     } else {
@@ -395,8 +431,8 @@ export default function ChatDetail() {
         audio.pause();
         setPlayingAudioId(null);
       } else {
-        audio.play().catch(err => {
-          console.error('Play error:', err);
+        audio.play().catch((err) => {
+          console.error("Play error:", err);
         });
         setPlayingAudioId(messageId);
       }
@@ -406,14 +442,10 @@ export default function ChatDetail() {
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Edit/Delete functions
-  const canEditDelete = (message) => {
-    return normalizeId(message?.sender_id) === normalizeId(currentUserId) || isAdmin;
-  };
-
+  // Edit/Delete handlers
   const handleEditClick = (message) => {
     setSelectedMessage(message);
     setEditingContent(message.content);
@@ -424,15 +456,17 @@ export default function ChatDetail() {
     if (!editingContent.trim() || !selectedMessage) return;
 
     try {
-      const res = await api.put(`/messages/${selectedMessage.id}`, {
-        content: editingContent.trim()
+      await api.put(`/messages/${selectedMessage.id}`, {
+        content: editingContent.trim(),
       });
 
-      setMessages(prev => prev.map(msg =>
-        msg.id === selectedMessage.id
-          ? { ...msg, content: editingContent.trim(), is_edited: true }
-          : msg
-      ));
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === selectedMessage.id
+            ? { ...msg, content: editingContent.trim(), is_edited: true }
+            : msg
+        )
+      );
 
       toast({
         title: "O'zgartirildi",
@@ -443,7 +477,7 @@ export default function ChatDetail() {
 
       onEditClose();
     } catch (error) {
-      console.error('Edit error:', error);
+      console.error("Edit error:", error);
       toast({
         title: "Xato",
         description: "Xabarni o'zgartirib bo'lmadi",
@@ -464,9 +498,8 @@ export default function ChatDetail() {
     try {
       await api.delete(`/messages/${selectedMessage.id}`);
 
-      // Local state dan o'chirish
       const deleteId = normalizeId(selectedMessage.id);
-      setMessages(prev => prev.filter(msg => normalizeId(msg.id) !== deleteId));
+      setMessages((prev) => prev.filter((msg) => normalizeId(msg.id) !== deleteId));
 
       toast({
         title: "O'chirildi",
@@ -476,9 +509,9 @@ export default function ChatDetail() {
       });
 
       onDeleteClose();
-      setSelectedMessage(null); // Cleanup
+      setSelectedMessage(null);
     } catch (error) {
-      console.error('Delete error:', error);
+      console.error("Delete error:", error);
       toast({
         title: "Xato",
         description: "Xabarni o'chirib bo'lmadi",
@@ -522,14 +555,23 @@ export default function ChatDetail() {
   }
 
   return (
-    <Box h="calc(100vh - 100px)" display="flex" flexDirection="column">
+    <Box
+      h="calc(100vh - 100px)"
+      display="flex"
+      flexDirection="column"
+      onClick={closeContextMenu} // ✅ tashqariga bossa menu yopiladi
+    >
       {/* Header */}
       <Card mb={4}>
         <CardHeader>
           <Flex align="center" justify="space-between">
             <Flex align="center" gap={4}>
               <Link to="/admin/chats">
-                <IconButton icon={<ArrowLeft size={20} />} colorScheme="gray" variant="ghost" />
+                <IconButton
+                  icon={<ArrowLeft size={20} />}
+                  colorScheme="gray"
+                  variant="ghost"
+                />
               </Link>
               <Box>
                 <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
@@ -537,7 +579,7 @@ export default function ChatDetail() {
                   {chatInfo.client && (
                     <Flex align="center" gap={2}>
                       <Avatar
-                        name={`${chatInfo.client.first_name || ''} ${chatInfo.client.last_name || ''}`}
+                        name={`${chatInfo.client.first_name || ""} ${chatInfo.client.last_name || ""}`}
                         src={chatInfo.client.avatar_url || undefined}
                         size="sm"
                         bg="red.500"
@@ -546,7 +588,7 @@ export default function ChatDetail() {
                       <Box>
                         <Text fontSize="sm" fontWeight="medium">
                           {chatInfo.client.first_name || chatInfo.client.last_name
-                            ? `${chatInfo.client.first_name || ''} ${chatInfo.client.last_name || ''}`.trim()
+                            ? `${chatInfo.client.first_name || ""} ${chatInfo.client.last_name || ""}`.trim()
                             : "Client"}
                         </Text>
                         <Text fontSize="xs" color="gray.500">
@@ -559,7 +601,7 @@ export default function ChatDetail() {
                   {chatInfo.freelancer && (
                     <Flex align="center" gap={2}>
                       <Avatar
-                        name={`${chatInfo.freelancer.first_name || ''} ${chatInfo.freelancer.last_name || ''}`}
+                        name={`${chatInfo.freelancer.first_name || ""} ${chatInfo.freelancer.last_name || ""}`}
                         src={chatInfo.freelancer.avatar_url || undefined}
                         size="sm"
                         bg="orange.500"
@@ -568,7 +610,7 @@ export default function ChatDetail() {
                       <Box>
                         <Text fontSize="sm" fontWeight="medium">
                           {chatInfo.freelancer.first_name || chatInfo.freelancer.last_name
-                            ? `${chatInfo.freelancer.first_name || ''} ${chatInfo.freelancer.last_name || ''}`.trim()
+                            ? `${chatInfo.freelancer.first_name || ""} ${chatInfo.freelancer.last_name || ""}`.trim()
                             : "Freelancer"}
                         </Text>
                         <Text fontSize="xs" color="gray.500">
@@ -600,31 +642,38 @@ export default function ChatDetail() {
               let senderName = "Unknown";
               let avatarBg = "gray.500";
 
-              if (msg.sender_role === 'admin') {
+              if (msg.sender_role === "admin") {
                 senderName = "Admin";
                 avatarBg = "blue.500";
-              } else if (msg.sender_role === 'client' || msg.sender_id === chatInfo.client?.id) {
+              } else if (msg.sender_role === "client" || msg.sender_id === chatInfo.client?.id) {
                 sender = chatInfo.client;
-                senderName = sender?.first_name || sender?.last_name 
-                  ? `${sender.first_name || ''} ${sender.last_name || ''}`.trim()
-                  : msg.sender_first_name || msg.sender_last_name
-                    ? `${msg.sender_first_name || ''} ${msg.sender_last_name || ''}`.trim()
-                    : "Client";
+                senderName =
+                  sender?.first_name || sender?.last_name
+                    ? `${sender.first_name || ""} ${sender.last_name || ""}`.trim()
+                    : msg.sender_first_name || msg.sender_last_name
+                      ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
+                      : "Client";
                 avatarBg = "red.500";
-              } else if (msg.sender_role === 'freelancer' || msg.sender_id === chatInfo.freelancer?.id) {
+              } else if (
+                msg.sender_role === "freelancer" ||
+                msg.sender_id === chatInfo.freelancer?.id
+              ) {
                 sender = chatInfo.freelancer;
-                senderName = sender?.first_name || sender?.last_name
-                  ? `${sender.first_name || ''} ${sender.last_name || ''}`.trim()
-                  : msg.sender_first_name || msg.sender_last_name
-                    ? `${msg.sender_first_name || ''} ${msg.sender_last_name || ''}`.trim()
-                    : "Freelancer";
+                senderName =
+                  sender?.first_name || sender?.last_name
+                    ? `${sender.first_name || ""} ${sender.last_name || ""}`.trim()
+                    : msg.sender_first_name || msg.sender_last_name
+                      ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
+                      : "Freelancer";
                 avatarBg = "orange.500";
               }
 
-              const isAdminMessage = msg.sender_role === 'admin';
+              const isAdminMessage = msg.sender_role === "admin";
               const avatarUrl = sender?.avatar_url || msg.sender_avatar;
               const username = sender?.username || msg.sender_username;
-              const canEdit = msg.type === 'text' && canEditDelete(msg);
+
+              // ✅ endi admin hamma narsani edit/delete qila oladi
+              const canEdit = msg.type === "text" && canEditDelete(msg);
               const canDelete = canEditDelete(msg);
 
               return (
@@ -638,9 +687,9 @@ export default function ChatDetail() {
                   role="group"
                 >
                   {/* Yuboruvchi ma'lumoti */}
-                  <Flex 
-                    align="center" 
-                    gap={2} 
+                  <Flex
+                    align="center"
+                    gap={2}
                     alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
                   >
                     {!isAdminMessage && (
@@ -661,12 +710,7 @@ export default function ChatDetail() {
                       )}
                     </Text>
                     {isAdminMessage && (
-                      <Avatar
-                        name={senderName}
-                        size="xs"
-                        bg={avatarBg}
-                        color="white"
-                      />
+                      <Avatar name={senderName} size="xs" bg={avatarBg} color="white" />
                     )}
                   </Flex>
 
@@ -679,18 +723,22 @@ export default function ChatDetail() {
                       borderRadius="lg"
                       boxShadow="md"
                     >
-                      {msg.type === 'text' && (
+                      {msg.type === "text" && (
                         <Box>
                           <Text>{msg.content}</Text>
                           {msg.is_edited && (
-                            <Text fontSize="xs" color={isAdminMessage ? "whiteAlpha.700" : "gray.500"} mt={1}>
+                            <Text
+                              fontSize="xs"
+                              color={isAdminMessage ? "whiteAlpha.700" : "gray.500"}
+                              mt={1}
+                            >
                               (tahrirlangan)
                             </Text>
                           )}
                         </Box>
                       )}
-                      
-                      {msg.type === 'voice' && msg.file_url && (
+
+                      {msg.type === "voice" && msg.file_url && (
                         <HStack spacing={3}>
                           <IconButton
                             icon={playingAudioId === msg.id ? <Pause size={18} /> : <Play size={18} />}
@@ -703,11 +751,11 @@ export default function ChatDetail() {
                         </HStack>
                       )}
 
-                      {msg.type === 'file' && msg.file_url && (
+                      {msg.type === "file" && msg.file_url && (
                         <HStack mt={2}>
                           <Paperclip size={16} />
                           <Text fontSize="sm" color={isAdminMessage ? "blue.100" : "blue.600"}>
-                            Fayl: {msg.file_url.split('/').pop()}
+                            Fayl: {msg.file_url.split("/").pop()}
                           </Text>
                         </HStack>
                       )}
@@ -734,7 +782,7 @@ export default function ChatDetail() {
                             aria-label="Options"
                           />
                           <MenuList>
-                            {msg.type === 'text' && (
+                            {msg.type === "text" && (
                               <MenuItem icon={<Copy size={16} />} onClick={() => handleCopyMessage(msg.content)}>
                                 Nusxalash
                               </MenuItem>
@@ -745,7 +793,11 @@ export default function ChatDetail() {
                               </MenuItem>
                             )}
                             {canDelete && (
-                              <MenuItem icon={<Trash2 size={16} />} color="red.500" onClick={() => handleDeleteClick(msg)}>
+                              <MenuItem
+                                icon={<Trash2 size={16} />}
+                                color="red.500"
+                                onClick={() => handleDeleteClick(msg)}
+                              >
                                 O'chirish
                               </MenuItem>
                             )}
@@ -758,7 +810,10 @@ export default function ChatDetail() {
                   {/* Vaqt va status */}
                   <HStack mt={1} alignSelf={isAdminMessage ? "flex-end" : "flex-start"}>
                     <Text fontSize="xs" color="gray.500">
-                      {new Date(msg.created_at).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}
+                      {new Date(msg.created_at).toLocaleTimeString("uz-UZ", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </Text>
                     {msg.is_read && isAdminMessage && (
                       <Badge ml={2} colorScheme="green" fontSize="xs">
@@ -784,7 +839,9 @@ export default function ChatDetail() {
                   <Box w={3} h={3} bg="red.500" borderRadius="full" />
                   <Text fontWeight="medium">Yozilmoqda...</Text>
                 </HStack>
-                <Text fontWeight="bold" color="red.500">{formatTime(recordingTime)}</Text>
+                <Text fontWeight="bold" color="red.500">
+                  {formatTime(recordingTime)}
+                </Text>
               </HStack>
               <Progress value={(recordingTime / 60) * 100} w="full" colorScheme="red" size="sm" />
               <HStack spacing={2}>
@@ -832,12 +889,7 @@ export default function ChatDetail() {
               <InputRightElement width="6rem">
                 <HStack spacing={1}>
                   <Tooltip label="Fayl yuklash">
-                    <IconButton 
-                      icon={<Paperclip size={18} />} 
-                      variant="ghost" 
-                      size="sm"
-                      aria-label="Fayl" 
-                    />
+                    <IconButton icon={<Paperclip size={18} />} variant="ghost" size="sm" aria-label="Fayl" />
                   </Tooltip>
                   <Tooltip label="Ovozli xabar">
                     <IconButton
@@ -882,11 +934,7 @@ export default function ChatDetail() {
             <Button variant="ghost" mr={3} onClick={onEditClose}>
               Bekor qilish
             </Button>
-            <Button 
-              colorScheme="blue" 
-              onClick={handleEditSubmit}
-              isDisabled={!editingContent.trim()}
-            >
+            <Button colorScheme="blue" onClick={handleEditSubmit} isDisabled={!editingContent.trim()}>
               Saqlash
             </Button>
           </ModalFooter>
@@ -913,16 +961,17 @@ export default function ChatDetail() {
         </ModalContent>
       </Modal>
 
+      {/* RIGHT-CLICK CONTEXT MENU (Telegramdek) */}
       <Menu isOpen={contextMenu.isOpen} onClose={closeContextMenu}>
         <MenuButton as={Box} position="fixed" top={0} left={0} w={0} h={0} />
         <MenuList
           position="fixed"
           top={`${contextMenu.y}px`}
           left={`${contextMenu.x}px`}
-          zIndex={1500}
+          zIndex={2000}
           minW="200px"
         >
-          {contextMenu.message?.type === 'text' && (
+          {contextMenu.message?.type === "text" && (
             <MenuItem
               icon={<Copy size={16} />}
               onClick={() => {
@@ -933,17 +982,21 @@ export default function ChatDetail() {
               Nusxalash
             </MenuItem>
           )}
-          {contextMenu.message && contextMenu.message.type === 'text' && canEditDelete(contextMenu.message) && (
-            <MenuItem
-              icon={<Edit2 size={16} />}
-              onClick={() => {
-                handleEditClick(contextMenu.message);
-                closeContextMenu();
-              }}
-            >
-              Tahrirlash
-            </MenuItem>
-          )}
+
+          {contextMenu.message &&
+            contextMenu.message.type === "text" &&
+            canEditDelete(contextMenu.message) && (
+              <MenuItem
+                icon={<Edit2 size={16} />}
+                onClick={() => {
+                  handleEditClick(contextMenu.message);
+                  closeContextMenu();
+                }}
+              >
+                Tahrirlash
+              </MenuItem>
+            )}
+
           {contextMenu.message && canEditDelete(contextMenu.message) && (
             <MenuItem
               icon={<Trash2 size={16} />}
