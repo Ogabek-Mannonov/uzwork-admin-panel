@@ -72,6 +72,8 @@ export default function ChatDetail() {
   const currentUserId = localStorage.getItem('userId');
   const isAdmin = localStorage.getItem('userRole') === 'admin';
 
+  const normalizeId = (id) => (id == null ? null : String(id));
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -123,7 +125,8 @@ export default function ChatDetail() {
       if (newMsg.chat_id === chatId) {
         setMessages((prev) => {
           // Duplicate check - agar allaqachon mavjud bo'lsa qo'shmaymiz
-          const exists = prev.some(msg => msg.id === newMsg.id);
+          const newMsgId = normalizeId(newMsg.id);
+          const exists = prev.some(msg => normalizeId(msg.id) === newMsgId);
           if (exists) {
             console.log('Duplicate message ignored:', newMsg.id);
             return prev;
@@ -147,9 +150,10 @@ export default function ChatDetail() {
 
     // Edit va Delete events
     socket.on("messageEdited", ({ messageId, content, updated_at }) => {
+      const editedId = normalizeId(messageId);
       setMessages((prev) =>
         prev.map(msg =>
-          msg.id === messageId
+          normalizeId(msg.id) === editedId
             ? { ...msg, content, is_edited: true, updated_at }
             : msg
         )
@@ -158,7 +162,8 @@ export default function ChatDetail() {
 
     socket.on("messageDeleted", ({ messageId }) => {
       console.log('Message deleted via socket:', messageId);
-      setMessages((prev) => prev.filter(msg => msg.id !== messageId));
+      const deleteId = normalizeId(messageId);
+      setMessages((prev) => prev.filter(msg => normalizeId(msg.id) !== deleteId));
     });
 
     return () => {
@@ -183,7 +188,14 @@ export default function ChatDetail() {
 
       const sentMessage = res.data?.data?.message || res.data?.message;
       if (sentMessage) {
-        setMessages((prev) => [...prev, sentMessage]);
+        setMessages((prev) => {
+          const sentId = normalizeId(sentMessage.id);
+          const exists = prev.some(msg => normalizeId(msg.id) === sentId);
+          if (exists) {
+            return prev;
+          }
+          return [...prev, sentMessage];
+        });
       }
       
       setNewMessage("");
@@ -308,7 +320,8 @@ export default function ChatDetail() {
       if (sentMessage) {
         // Duplicate check
         setMessages((prev) => {
-          const exists = prev.some(msg => msg.id === sentMessage.id);
+          const sentId = normalizeId(sentMessage.id);
+          const exists = prev.some(msg => normalizeId(msg.id) === sentId);
           if (exists) return prev;
           return [...prev, sentMessage];
         });
@@ -446,7 +459,8 @@ export default function ChatDetail() {
       await api.delete(`/messages/${selectedMessage.id}`);
 
       // Local state dan o'chirish
-      setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
+      const deleteId = normalizeId(selectedMessage.id);
+      setMessages(prev => prev.filter(msg => normalizeId(msg.id) !== deleteId));
 
       toast({
         title: "O'chirildi",
@@ -477,8 +491,6 @@ export default function ChatDetail() {
       duration: 1500,
     });
   };
-
-  const handleDeleteConfirm = async () => {
 
   if (loading) {
     return (
