@@ -67,6 +67,12 @@ export default function ChatDetail() {
   const [editingContent, setEditingContent] = useState("");
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const [contextMenu, setContextMenu] = useState({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    message: null,
+  });
 
   // Current user info
   const currentUserId = localStorage.getItem('userId');
@@ -492,6 +498,20 @@ export default function ChatDetail() {
     });
   };
 
+  const openContextMenu = (event, message) => {
+    event.preventDefault();
+    setContextMenu({
+      isOpen: true,
+      x: event.clientX,
+      y: event.clientY,
+      message,
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false, message: null }));
+  };
+
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
@@ -651,7 +671,7 @@ export default function ChatDetail() {
                   </Flex>
 
                   {/* Xabar matni */}
-                  <Box position="relative">
+                  <Box position="relative" onContextMenu={(event) => openContextMenu(event, msg)}>
                     <Box
                       bg={isAdminMessage ? "blue.500" : "white"}
                       color={isAdminMessage ? "white" : "black"}
@@ -892,6 +912,52 @@ export default function ChatDetail() {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      <Menu isOpen={contextMenu.isOpen} onClose={closeContextMenu}>
+        <MenuButton as={Box} position="fixed" top={0} left={0} w={0} h={0} />
+        <MenuList
+          position="fixed"
+          top={`${contextMenu.y}px`}
+          left={`${contextMenu.x}px`}
+          zIndex={1500}
+          minW="200px"
+        >
+          {contextMenu.message?.type === 'text' && (
+            <MenuItem
+              icon={<Copy size={16} />}
+              onClick={() => {
+                handleCopyMessage(contextMenu.message.content);
+                closeContextMenu();
+              }}
+            >
+              Nusxalash
+            </MenuItem>
+          )}
+          {contextMenu.message && contextMenu.message.type === 'text' && canEditDelete(contextMenu.message) && (
+            <MenuItem
+              icon={<Edit2 size={16} />}
+              onClick={() => {
+                handleEditClick(contextMenu.message);
+                closeContextMenu();
+              }}
+            >
+              Tahrirlash
+            </MenuItem>
+          )}
+          {contextMenu.message && canEditDelete(contextMenu.message) && (
+            <MenuItem
+              icon={<Trash2 size={16} />}
+              color="red.500"
+              onClick={() => {
+                handleDeleteClick(contextMenu.message);
+                closeContextMenu();
+              }}
+            >
+              O'chirish
+            </MenuItem>
+          )}
+        </MenuList>
+      </Menu>
     </Box>
   );
 }
