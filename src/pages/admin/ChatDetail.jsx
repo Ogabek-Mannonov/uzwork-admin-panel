@@ -54,13 +54,21 @@ import socket from "../../utils/socket";
 
 export default function ChatDetail() {
   const { chatId } = useParams();
+  const toast = useToast();
+
   const [messages, setMessages] = useState([]);
-  const [chatInfo, setChatInfo] = useState({ client: null, freelancer: null });
+  const [chatInfo, setChatInfo] = useState({
+    client: null,
+    freelancer: null,
+    jobTitle: "",
+    jobId: null,
+  });
+
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
+
   const messagesEndRef = useRef(null);
-  const toast = useToast();
 
   // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -77,16 +85,15 @@ export default function ChatDetail() {
   // Edit/Delete states
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [editingContent, setEditingContent] = useState("");
-  const {
-    isOpen: isEditOpen,
-    onOpen: onEditOpen,
-    onClose: onEditClose,
-  } = useDisclosure();
+
+  const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } =
+    useDisclosure();
   const {
     isOpen: isDeleteOpen,
     onOpen: onDeleteOpen,
     onClose: onDeleteClose,
   } = useDisclosure();
+
   const [contextMenu, setContextMenu] = useState({
     isOpen: false,
     x: 0,
@@ -94,12 +101,11 @@ export default function ChatDetail() {
     message: null,
   });
 
-  // ====== FIXED: Current user info / role ======
+  // ====== Current user info / role ======
   const normalizeId = (id) => (id == null ? null : String(id));
 
   const currentUserId = normalizeId(localStorage.getItem("userId"));
 
-  // role turli keylarda bo'lishi mumkin: userRole / role / user_role
   const roleRaw =
     localStorage.getItem("userRole") ||
     localStorage.getItem("role") ||
@@ -107,12 +113,9 @@ export default function ChatDetail() {
     "";
 
   const role = String(roleRaw).toLowerCase();
-
-  // admin, superadmin, administrator -> hammasi admin
   const isAdmin =
     role.includes("admin") || window.location.pathname.startsWith("/admin");
 
-  // sender id turli backend formatlaridan topiladi
   const getSenderId = (m) =>
     normalizeId(
       m?.sender_id ??
@@ -127,6 +130,8 @@ export default function ChatDetail() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const goUserLink = (u) => (u?.id ? `/admin/users/${u.id}` : "#");
+
   useEffect(() => {
     socket.connect();
     socket.emit("joinChat", chatId);
@@ -134,25 +139,41 @@ export default function ChatDetail() {
     const fetchData = async () => {
       try {
         const res = await api(`/messages/${chatId}`);
-        console.log("Backenddan to'liq response:", res.data);
+        const payload = res?.data ?? res;
 
+        // messages normalize
         let fetchedMessages = [];
-        if (res.data?.messages) {
-          fetchedMessages = res.data.messages;
-        } else if (res.data?.data?.messages) {
-          fetchedMessages = res.data.data.messages;
-        } else if (Array.isArray(res.data)) {
-          fetchedMessages = res.data;
-        }
+        if (payload?.messages) fetchedMessages = payload.messages;
+        else if (payload?.data?.messages) fetchedMessages = payload.data.messages;
+        else if (Array.isArray(payload)) fetchedMessages = payload;
 
         setMessages(fetchedMessages || []);
 
-        const clientData = res.data?.client || null;
-        const freelancerData = res.data?.freelancer || null;
+        const clientData = payload?.client || payload?.data?.client || null;
+        const freelancerData =
+          payload?.freelancer || payload?.data?.freelancer || null;
+
+        const jobTitle =
+          payload?.job?.title ||
+          payload?.job_title ||
+          payload?.contract?.job_title ||
+          payload?.data?.job?.title ||
+          payload?.data?.job_title ||
+          "";
+
+        const jobId =
+          payload?.job?.id ||
+          payload?.job_id ||
+          payload?.contract?.job_id ||
+          payload?.data?.job?.id ||
+          payload?.data?.job_id ||
+          null;
 
         setChatInfo({
           client: clientData,
           freelancer: freelancerData,
+          jobTitle,
+          jobId,
         });
       } catch (err) {
         console.error("Ma'lumotlarni olishda xato:", err);
@@ -174,11 +195,7 @@ export default function ChatDetail() {
         setMessages((prev) => {
           const newMsgId = normalizeId(newMsg.id);
           const exists = prev.some((msg) => normalizeId(msg.id) === newMsgId);
-          if (exists) {
-            console.log("Duplicate message ignored:", newMsg.id);
-            return prev;
-          }
-          console.log("New message added:", newMsg.id);
+          if (exists) return prev;
           return [...prev, newMsg];
         });
         scrollToBottom();
@@ -195,7 +212,6 @@ export default function ChatDetail() {
       }
     });
 
-    // Edit va Delete events
     socket.on("messageEdited", ({ messageId, content, updated_at }) => {
       const editedId = normalizeId(messageId);
       setMessages((prev) =>
@@ -208,7 +224,6 @@ export default function ChatDetail() {
     });
 
     socket.on("messageDeleted", ({ messageId }) => {
-      console.log("Message deleted via socket:", messageId);
       const deleteId = normalizeId(messageId);
       setMessages((prev) => prev.filter((msg) => normalizeId(msg.id) !== deleteId));
     });
@@ -233,7 +248,9 @@ export default function ChatDetail() {
         type: "text",
       });
 
-      const sentMessage = res.data?.data?.message || res.data?.message;
+      const payload = res?.data ?? res;
+      const sentMessage = payload?.data?.message || payload?.message;
+
       if (sentMessage) {
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
@@ -249,7 +266,7 @@ export default function ChatDetail() {
       console.error("Xabar yuborish xatosi:", err);
       toast({
         title: "Xato",
-        description: "Xabar yuborilmadi",
+        description: err?.response?.data?.message || "Xabar yuborilmadi",
         status: "error",
         duration: 5000,
       });
@@ -364,7 +381,9 @@ export default function ChatDetail() {
         voice_url: voiceUrl,
       });
 
-      const sentMessage = res.data?.message || res.message;
+      const payload = res?.data ?? res;
+      const sentMessage = payload?.message || payload?.data?.message;
+
       if (sentMessage) {
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
@@ -444,11 +463,11 @@ export default function ChatDetail() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // ====== FIXED: Edit/Delete functions ======
+  // ====== Edit/Delete permissions ======
   const canEditDelete = (message) => {
     if (!message) return false;
-    if (isAdmin) return true; // ✅ Admin bo'lsa hammasiga ruxsat
-    return getSenderId(message) === currentUserId; // oddiy user faqat o'ziniki
+    if (isAdmin) return true;
+    return getSenderId(message) === currentUserId;
   };
 
   const handleEditClick = (message) => {
@@ -550,15 +569,11 @@ export default function ChatDetail() {
     setContextMenu((prev) => ({ ...prev, isOpen: false, message: null }));
   };
 
-  // ✅ FIX: O'chirilgan / bo'sh text xabarlarni ko'rsatmaslik
+  // Hide soft-deleted / empty text
   const visibleMessages = useMemo(() => {
     return (messages || []).filter((m) => {
       const isSoftDeleted = m?.is_deleted === true || !!m?.deleted_at;
-
-      // text bo'lsa, content bo'sh bo'lsa ham yashiramiz
-      const isEmptyText =
-        m?.type === "text" && !String(m?.content ?? "").trim();
-
+      const isEmptyText = m?.type === "text" && !String(m?.content ?? "").trim();
       return !(isSoftDeleted || isEmptyText);
     });
   }, [messages]);
@@ -582,7 +597,7 @@ export default function ChatDetail() {
       {/* Header */}
       <Card mb={4}>
         <CardHeader>
-          <Flex align="center" justify="space-between">
+          <Flex align="center" justify="space-between" gap={4} wrap="wrap">
             <Flex align="center" gap={4}>
               <Link to="/admin/chats">
                 <IconButton
@@ -591,11 +606,30 @@ export default function ChatDetail() {
                   variant="ghost"
                 />
               </Link>
+
               <Box>
-                <Heading size="md">Chat #{chatId.slice(0, 8)}...</Heading>
-                <Flex align="center" gap={6} mt={2}>
+                <Heading size="lg" lineHeight="1.1">
+                  {chatInfo.jobTitle?.trim()
+                    ? chatInfo.jobTitle
+                    : chatInfo.jobId
+                    ? `Job #${String(chatInfo.jobId).slice(0, 8)}`
+                    : "Chat"}
+                </Heading>
+
+                <Text fontSize="sm" color="gray.500" mt={1}>
+                  Chat #{chatId.slice(0, 8)}...
+                </Text>
+
+                <Flex align="center" gap={6} mt={3} wrap="wrap">
                   {chatInfo.client && (
-                    <Flex align="center" gap={2}>
+                    <Flex
+                      as={chatInfo.client?.id ? Link : "div"}
+                      to={chatInfo.client?.id ? goUserLink(chatInfo.client) : undefined}
+                      align="center"
+                      gap={2}
+                      _hover={chatInfo.client?.id ? { opacity: 0.85 } : undefined}
+                      cursor={chatInfo.client?.id ? "pointer" : "default"}
+                    >
                       <Avatar
                         name={`${chatInfo.client.first_name || ""} ${chatInfo.client.last_name || ""}`}
                         src={chatInfo.client.avatar_url || undefined}
@@ -617,7 +651,16 @@ export default function ChatDetail() {
                   )}
 
                   {chatInfo.freelancer && (
-                    <Flex align="center" gap={2}>
+                    <Flex
+                      as={chatInfo.freelancer?.id ? Link : "div"}
+                      to={
+                        chatInfo.freelancer?.id ? goUserLink(chatInfo.freelancer) : undefined
+                      }
+                      align="center"
+                      gap={2}
+                      _hover={chatInfo.freelancer?.id ? { opacity: 0.85 } : undefined}
+                      cursor={chatInfo.freelancer?.id ? "pointer" : "default"}
+                    >
                       <Avatar
                         name={`${chatInfo.freelancer.first_name || ""} ${chatInfo.freelancer.last_name || ""}`}
                         src={chatInfo.freelancer.avatar_url || undefined}
@@ -640,18 +683,15 @@ export default function ChatDetail() {
                 </Flex>
               </Box>
             </Flex>
-            <Button
-              leftIcon={<AlertTriangle size={18} />}
-              colorScheme="red"
-              variant="outline"
-            >
+
+            <Button leftIcon={<AlertTriangle size={18} />} colorScheme="red" variant="outline">
               Dispute ochish
             </Button>
           </Flex>
         </CardHeader>
       </Card>
 
-      {/* Xabarlar */}
+      {/* Messages */}
       <Box flex="1" overflowY="auto" p={4} bg="gray.50" borderRadius="lg">
         <VStack align="stretch" spacing={4}>
           {visibleMessages.length === 0 ? (
@@ -669,7 +709,7 @@ export default function ChatDetail() {
                 avatarBg = "blue.500";
               } else if (
                 msg.sender_role === "client" ||
-                msg.sender_id === chatInfo.client?.id
+                normalizeId(msg.sender_id) === normalizeId(chatInfo.client?.id)
               ) {
                 sender = chatInfo.client;
                 senderName =
@@ -681,7 +721,7 @@ export default function ChatDetail() {
                 avatarBg = "red.500";
               } else if (
                 msg.sender_role === "freelancer" ||
-                msg.sender_id === chatInfo.freelancer?.id
+                normalizeId(msg.sender_id) === normalizeId(chatInfo.freelancer?.id)
               ) {
                 sender = chatInfo.freelancer;
                 senderName =
@@ -696,8 +736,20 @@ export default function ChatDetail() {
               const isAdminMessage = msg.sender_role === "admin";
               const avatarUrl = sender?.avatar_url || msg.sender_avatar;
               const username = sender?.username || msg.sender_username;
+
               const canEdit = msg.type === "text" && canEditDelete(msg);
               const canDelete = canEditDelete(msg);
+
+              const senderUserId =
+                msg.sender_role === "client"
+                  ? chatInfo.client?.id
+                  : msg.sender_role === "freelancer"
+                  ? chatInfo.freelancer?.id
+                  : null;
+
+              const senderProfileLink = senderUserId
+                ? `/admin/users/${senderUserId}`
+                : "#";
 
               return (
                 <Flex
@@ -709,11 +761,15 @@ export default function ChatDetail() {
                   position="relative"
                   role="group"
                 >
-                  {/* Yuboruvchi ma'lumoti */}
+                  {/* Sender info (clickable) */}
                   <Flex
+                    as={!isAdminMessage && senderUserId ? Link : "div"}
+                    to={!isAdminMessage && senderUserId ? senderProfileLink : undefined}
                     align="center"
                     gap={2}
                     alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
+                    cursor={!isAdminMessage && senderUserId ? "pointer" : "default"}
+                    _hover={!isAdminMessage && senderUserId ? { opacity: 0.85 } : undefined}
                   >
                     {!isAdminMessage && (
                       <Avatar
@@ -724,34 +780,23 @@ export default function ChatDetail() {
                         color="white"
                       />
                     )}
+
                     <Text fontSize="xs" fontWeight="semibold" color="gray.600">
                       {senderName}
                       {username && (
-                        <Text
-                          as="span"
-                          fontWeight="normal"
-                          color="gray.500"
-                          ml={1}
-                        >
+                        <Text as="span" fontWeight="normal" color="gray.500" ml={1}>
                           @{username}
                         </Text>
                       )}
                     </Text>
+
                     {isAdminMessage && (
-                      <Avatar
-                        name={senderName}
-                        size="xs"
-                        bg={avatarBg}
-                        color="white"
-                      />
+                      <Avatar name={senderName} size="xs" bg={avatarBg} color="white" />
                     )}
                   </Flex>
 
-                  {/* Xabar matni */}
-                  <Box
-                    position="relative"
-                    onContextMenu={(event) => openContextMenu(event, msg)}
-                  >
+                  {/* Bubble */}
+                  <Box position="relative" onContextMenu={(e) => openContextMenu(e, msg)}>
                     <Box
                       bg={isAdminMessage ? "blue.500" : "white"}
                       color={isAdminMessage ? "white" : "black"}
@@ -765,9 +810,7 @@ export default function ChatDetail() {
                           {msg.is_edited && (
                             <Text
                               fontSize="xs"
-                              color={
-                                isAdminMessage ? "whiteAlpha.700" : "gray.500"
-                              }
+                              color={isAdminMessage ? "whiteAlpha.700" : "gray.500"}
                               mt={1}
                             >
                               (tahrirlangan)
@@ -788,9 +831,7 @@ export default function ChatDetail() {
                             }
                             size="sm"
                             colorScheme={isAdminMessage ? "whiteAlpha" : "blue"}
-                            onClick={() =>
-                              toggleAudioPlayback(msg.id, msg.file_url)
-                            }
+                            onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
                             aria-label="Play/Pause"
                           />
                           <Text fontSize="sm">Ovozli xabar</Text>
@@ -810,7 +851,7 @@ export default function ChatDetail() {
                       )}
                     </Box>
 
-                    {/* Three-dot Menu */}
+                    {/* 3-dot menu */}
                     {(canEdit || canDelete) && (
                       <Box
                         position="absolute"
@@ -832,27 +873,17 @@ export default function ChatDetail() {
                           />
                           <MenuList>
                             {msg.type === "text" && (
-                              <MenuItem
-                                icon={<Copy size={16} />}
-                                onClick={() => handleCopyMessage(msg.content)}
-                              >
+                              <MenuItem icon={<Copy size={16} />} onClick={() => handleCopyMessage(msg.content)}>
                                 Nusxalash
                               </MenuItem>
                             )}
                             {canEdit && (
-                              <MenuItem
-                                icon={<Edit2 size={16} />}
-                                onClick={() => handleEditClick(msg)}
-                              >
+                              <MenuItem icon={<Edit2 size={16} />} onClick={() => handleEditClick(msg)}>
                                 Tahrirlash
                               </MenuItem>
                             )}
                             {canDelete && (
-                              <MenuItem
-                                icon={<Trash2 size={16} />}
-                                color="red.500"
-                                onClick={() => handleDeleteClick(msg)}
-                              >
+                              <MenuItem icon={<Trash2 size={16} />} color="red.500" onClick={() => handleDeleteClick(msg)}>
                                 O'chirish
                               </MenuItem>
                             )}
@@ -862,11 +893,8 @@ export default function ChatDetail() {
                     )}
                   </Box>
 
-                  {/* Vaqt va status */}
-                  <HStack
-                    mt={1}
-                    alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
-                  >
+                  {/* Time */}
+                  <HStack mt={1} alignSelf={isAdminMessage ? "flex-end" : "flex-start"}>
                     <Text fontSize="xs" color="gray.500">
                       {new Date(msg.created_at).toLocaleTimeString("uz-UZ", {
                         hour: "2-digit",
@@ -883,11 +911,12 @@ export default function ChatDetail() {
               );
             })
           )}
+
           <div ref={messagesEndRef} />
         </VStack>
       </Box>
 
-      {/* Xabar yozish */}
+      {/* Composer */}
       <Card mt={4}>
         <CardBody>
           {isRecording && (
@@ -901,12 +930,7 @@ export default function ChatDetail() {
                   {formatTime(recordingTime)}
                 </Text>
               </HStack>
-              <Progress
-                value={(recordingTime / 60) * 100}
-                w="full"
-                colorScheme="red"
-                size="sm"
-              />
+              <Progress value={(recordingTime / 60) * 100} w="full" colorScheme="red" size="sm" />
               <HStack spacing={2}>
                 <Button colorScheme="red" size="sm" onClick={cancelRecording}>
                   Bekor qilish
@@ -931,20 +955,10 @@ export default function ChatDetail() {
                 aria-label="Preview"
               />
               <Text flex={1}>Ovozli xabar ({formatTime(recordingTime)})</Text>
-              <Button
-                size="sm"
-                colorScheme="red"
-                variant="ghost"
-                onClick={() => setAudioBlob(null)}
-              >
+              <Button size="sm" colorScheme="red" variant="ghost" onClick={() => setAudioBlob(null)}>
                 O'chirish
               </Button>
-              <Button
-                size="sm"
-                colorScheme="blue"
-                onClick={sendVoiceMessage}
-                isLoading={sending}
-              >
+              <Button size="sm" colorScheme="blue" onClick={sendVoiceMessage} isLoading={sending}>
                 Yuborish
               </Button>
             </HStack>
@@ -956,20 +970,13 @@ export default function ChatDetail() {
                 placeholder="Xabar yozing..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) =>
-                  e.key === "Enter" && !sending && handleSendMessage()
-                }
+                onKeyPress={(e) => e.key === "Enter" && !sending && handleSendMessage()}
                 disabled={sending}
               />
               <InputRightElement width="6rem">
                 <HStack spacing={1}>
                   <Tooltip label="Fayl yuklash">
-                    <IconButton
-                      icon={<Paperclip size={18} />}
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Fayl"
-                    />
+                    <IconButton icon={<Paperclip size={18} />} variant="ghost" size="sm" aria-label="Fayl" />
                   </Tooltip>
                   <Tooltip label="Ovozli xabar">
                     <IconButton
@@ -1014,27 +1021,21 @@ export default function ChatDetail() {
             <Button variant="ghost" mr={3} onClick={onEditClose}>
               Bekor qilish
             </Button>
-            <Button
-              colorScheme="blue"
-              onClick={handleEditSubmit}
-              isDisabled={!editingContent.trim()}
-            >
+            <Button colorScheme="blue" onClick={handleEditSubmit} isDisabled={!editingContent.trim()}>
               Saqlash
             </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Modal */}
       <Modal isOpen={isDeleteOpen} onClose={onDeleteClose}>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Xabarni o'chirish</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <Text>
-              Ushbu xabarni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.
-            </Text>
+            <Text>Ushbu xabarni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.</Text>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onDeleteClose}>
@@ -1047,7 +1048,7 @@ export default function ChatDetail() {
         </ModalContent>
       </Modal>
 
-      {/* RIGHT-CLICK CONTEXT MENU */}
+      {/* Right-click menu */}
       <Menu isOpen={contextMenu.isOpen} onClose={closeContextMenu}>
         <MenuButton as={Box} position="fixed" top={0} left={0} w={0} h={0} />
         <MenuList
