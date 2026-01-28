@@ -22,6 +22,7 @@ import AdminChats from './pages/admin/Chats';
 import ChatDetail from './pages/admin/ChatDetail';
 import JobDetail from './pages/admin/JobDetail';
 import UserDetail from './pages/admin/UserDetail';
+import AdminEditJob from './pages/admin/AdminEditJob';
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
           <Route path="users/:userId" element={<UserDetail />} />
           <Route path="jobs" element={<AdminJobs />} /> 
           <Route path="jobs/:jobId" element={<JobDetail />} />
+          <Route path="/admin/jobs/:id/edit" element={<AdminEditJob />} />
           <Route path="disputes" element={<AdminDisputes />} />
           <Route path="disputes/:disputeId" element={<DisputeDetail />} />
           <Route path="payments" element={<AdminPayments />} />

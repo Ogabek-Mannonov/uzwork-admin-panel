@@ -22,6 +22,7 @@ import {
   Spinner,
   Alert,
   AlertIcon,
+  useToast,
 } from "@chakra-ui/react";
 import { SearchIcon, ViewIcon, EditIcon, DeleteIcon, StarIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
@@ -35,6 +36,8 @@ export default function AdminJobs() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedBoost, setSelectedBoost] = useState("all");
+
+  const toast = useToast();
 
   const formatCreatedAt = (dateStr) => {
     if (!dateStr || typeof dateStr !== "string") return "—";
@@ -57,7 +60,6 @@ export default function AdminJobs() {
   };
 
   const buildBudgetLabel = (job) => {
-    // Agar backend allaqachon string budget yuborsa
     if (job?.budget && typeof job.budget === "string") return job.budget;
 
     const min = job?.budget_min ?? job?.budgetMin;
@@ -76,6 +78,36 @@ export default function AdminJobs() {
     return "Belgilanmagan";
   };
 
+  // ✅ DELETE handler
+  const handleDelete = async (jobId) => {
+    const ok = window.confirm("Haqiqatan ham bu loyihani o‘chirmoqchimisiz?");
+    if (!ok) return;
+
+    try {
+      await api.delete(`/projects/${jobId}`);
+
+      // UI dan olib tashlaymiz
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+
+      toast({
+        title: "O‘chirildi",
+        description: "Loyiha muvaffaqiyatli o‘chirildi",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast({
+        title: "Xato",
+        description: "Loyihani o‘chirishda xato yuz berdi",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   useEffect(() => {
     const fetchJobs = async () => {
       try {
@@ -84,7 +116,7 @@ export default function AdminJobs() {
 
         const res = await api("/projects?status=all&limit=1000");
 
-        // api wrapper ba'zan res.data emas, to'g'ridan-to'g'ri payload qaytaradi
+        // api wrapper ba'zida res.data emas, to'g'ridan-to'g'ri payload qaytaradi
         const payload = res?.data ?? res;
 
         const allJobs =
@@ -282,6 +314,7 @@ export default function AdminJobs() {
 
                   <Td>
                     <HStack spacing={1}>
+                      {/* 👁 View */}
                       <IconButton
                         as={Link}
                         to={`/admin/jobs/${job.id}`}
@@ -291,19 +324,26 @@ export default function AdminJobs() {
                         variant="ghost"
                         aria-label="Ko'rish"
                       />
+
+                      {/* ✏️ Edit (hozircha edit page bo'lmasa viewga ham yuborishingiz mumkin) */}
                       <IconButton
+                        as={Link}
+                        to={`/admin/jobs/${job.id}/edit`}
                         icon={<EditIcon />}
                         size="sm"
                         colorScheme="green"
                         variant="ghost"
                         aria-label="Tahrirlash"
                       />
+
+                      {/* 🗑 Delete */}
                       <IconButton
                         icon={<DeleteIcon />}
                         size="sm"
                         colorScheme="red"
                         variant="ghost"
                         aria-label="O'chirish"
+                        onClick={() => handleDelete(job.id)}
                       />
                     </HStack>
                   </Td>
