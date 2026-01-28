@@ -1,5 +1,5 @@
 // src/pages/admin/ChatDetail.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Button,
   Box,
@@ -172,7 +172,6 @@ export default function ChatDetail() {
     socket.on("newMessage", (newMsg) => {
       if (newMsg.chat_id === chatId) {
         setMessages((prev) => {
-          // Duplicate check - agar allaqachon mavjud bo'lsa qo'shmaymiz
           const newMsgId = normalizeId(newMsg.id);
           const exists = prev.some((msg) => normalizeId(msg.id) === newMsgId);
           if (exists) {
@@ -239,9 +238,7 @@ export default function ChatDetail() {
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
           const exists = prev.some((msg) => normalizeId(msg.id) === sentId);
-          if (exists) {
-            return prev;
-          }
+          if (exists) return prev;
           return [...prev, sentMessage];
         });
       }
@@ -281,8 +278,8 @@ export default function ChatDetail() {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        setAudioBlob(audioBlob);
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setAudioBlob(blob);
         stream.getTracks().forEach((track) => track.stop());
       };
 
@@ -369,7 +366,6 @@ export default function ChatDetail() {
 
       const sentMessage = res.data?.message || res.message;
       if (sentMessage) {
-        // Duplicate check
         setMessages((prev) => {
           const sentId = normalizeId(sentMessage.id);
           const exists = prev.some((msg) => normalizeId(msg.id) === sentId);
@@ -409,8 +405,6 @@ export default function ChatDetail() {
       fullAudioUrl = `${baseURL}${audioUrl}`;
     }
 
-    console.log("🎵 Playing audio:", fullAudioUrl);
-
     const audio = audioRefs.current[messageId];
 
     if (!audio) {
@@ -431,18 +425,14 @@ export default function ChatDetail() {
         setPlayingAudioId(null);
       };
 
-      newAudio.play().catch((err) => {
-        console.error("Play error:", err);
-      });
+      newAudio.play().catch((err) => console.error("Play error:", err));
       setPlayingAudioId(messageId);
     } else {
       if (playingAudioId === messageId) {
         audio.pause();
         setPlayingAudioId(null);
       } else {
-        audio.play().catch((err) => {
-          console.error("Play error:", err);
-        });
+        audio.play().catch((err) => console.error("Play error:", err));
         setPlayingAudioId(messageId);
       }
     }
@@ -457,12 +447,8 @@ export default function ChatDetail() {
   // ====== FIXED: Edit/Delete functions ======
   const canEditDelete = (message) => {
     if (!message) return false;
-
-    // ✅ Admin bo'lsa hammasiga ruxsat
-    if (isAdmin) return true;
-
-    // Oddiy user faqat o'zi yuborganiga
-    return getSenderId(message) === currentUserId;
+    if (isAdmin) return true; // ✅ Admin bo'lsa hammasiga ruxsat
+    return getSenderId(message) === currentUserId; // oddiy user faqat o'ziniki
   };
 
   const handleEditClick = (message) => {
@@ -481,7 +467,7 @@ export default function ChatDetail() {
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === selectedMessage.id
+          normalizeId(msg.id) === normalizeId(selectedMessage.id)
             ? { ...msg, content: editingContent.trim(), is_edited: true }
             : msg
         )
@@ -517,7 +503,6 @@ export default function ChatDetail() {
     try {
       await api.delete(`/messages/${selectedMessage.id}`);
 
-      // Local state dan o'chirish
       const deleteId = normalizeId(selectedMessage.id);
       setMessages((prev) => prev.filter((msg) => normalizeId(msg.id) !== deleteId));
 
@@ -529,7 +514,7 @@ export default function ChatDetail() {
       });
 
       onDeleteClose();
-      setSelectedMessage(null); // Cleanup
+      setSelectedMessage(null);
     } catch (error) {
       console.error("Delete error:", error);
       toast({
@@ -565,6 +550,19 @@ export default function ChatDetail() {
     setContextMenu((prev) => ({ ...prev, isOpen: false, message: null }));
   };
 
+  // ✅ FIX: O'chirilgan / bo'sh text xabarlarni ko'rsatmaslik
+  const visibleMessages = useMemo(() => {
+    return (messages || []).filter((m) => {
+      const isSoftDeleted = m?.is_deleted === true || !!m?.deleted_at;
+
+      // text bo'lsa, content bo'sh bo'lsa ham yashiramiz
+      const isEmptyText =
+        m?.type === "text" && !String(m?.content ?? "").trim();
+
+      return !(isSoftDeleted || isEmptyText);
+    });
+  }, [messages]);
+
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
@@ -579,7 +577,7 @@ export default function ChatDetail() {
       h="calc(100vh - 100px)"
       display="flex"
       flexDirection="column"
-      onClick={closeContextMenu} // ✅ tashqariga bosganda menu yopiladi
+      onClick={closeContextMenu}
     >
       {/* Header */}
       <Card mb={4}>
@@ -642,7 +640,11 @@ export default function ChatDetail() {
                 </Flex>
               </Box>
             </Flex>
-            <Button leftIcon={<AlertTriangle size={18} />} colorScheme="red" variant="outline">
+            <Button
+              leftIcon={<AlertTriangle size={18} />}
+              colorScheme="red"
+              variant="outline"
+            >
               Dispute ochish
             </Button>
           </Flex>
@@ -652,12 +654,12 @@ export default function ChatDetail() {
       {/* Xabarlar */}
       <Box flex="1" overflowY="auto" p={4} bg="gray.50" borderRadius="lg">
         <VStack align="stretch" spacing={4}>
-          {messages.length === 0 ? (
+          {visibleMessages.length === 0 ? (
             <Text textAlign="center" color="gray.500" py={10}>
               Hozircha xabarlar yo'q
             </Text>
           ) : (
-            messages.map((msg) => {
+            visibleMessages.map((msg) => {
               let sender = null;
               let senderName = "Unknown";
               let avatarBg = "gray.500";
@@ -665,14 +667,17 @@ export default function ChatDetail() {
               if (msg.sender_role === "admin") {
                 senderName = "Admin";
                 avatarBg = "blue.500";
-              } else if (msg.sender_role === "client" || msg.sender_id === chatInfo.client?.id) {
+              } else if (
+                msg.sender_role === "client" ||
+                msg.sender_id === chatInfo.client?.id
+              ) {
                 sender = chatInfo.client;
                 senderName =
                   sender?.first_name || sender?.last_name
                     ? `${sender.first_name || ""} ${sender.last_name || ""}`.trim()
                     : msg.sender_first_name || msg.sender_last_name
-                      ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
-                      : "Client";
+                    ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
+                    : "Client";
                 avatarBg = "red.500";
               } else if (
                 msg.sender_role === "freelancer" ||
@@ -683,8 +688,8 @@ export default function ChatDetail() {
                   sender?.first_name || sender?.last_name
                     ? `${sender.first_name || ""} ${sender.last_name || ""}`.trim()
                     : msg.sender_first_name || msg.sender_last_name
-                      ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
-                      : "Freelancer";
+                    ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
+                    : "Freelancer";
                 avatarBg = "orange.500";
               }
 
@@ -696,7 +701,7 @@ export default function ChatDetail() {
 
               return (
                 <Flex
-                  key={msg.id}
+                  key={normalizeId(msg.id)}
                   alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
                   maxW="70%"
                   direction="column"
@@ -722,18 +727,31 @@ export default function ChatDetail() {
                     <Text fontSize="xs" fontWeight="semibold" color="gray.600">
                       {senderName}
                       {username && (
-                        <Text as="span" fontWeight="normal" color="gray.500" ml={1}>
+                        <Text
+                          as="span"
+                          fontWeight="normal"
+                          color="gray.500"
+                          ml={1}
+                        >
                           @{username}
                         </Text>
                       )}
                     </Text>
                     {isAdminMessage && (
-                      <Avatar name={senderName} size="xs" bg={avatarBg} color="white" />
+                      <Avatar
+                        name={senderName}
+                        size="xs"
+                        bg={avatarBg}
+                        color="white"
+                      />
                     )}
                   </Flex>
 
                   {/* Xabar matni */}
-                  <Box position="relative" onContextMenu={(event) => openContextMenu(event, msg)}>
+                  <Box
+                    position="relative"
+                    onContextMenu={(event) => openContextMenu(event, msg)}
+                  >
                     <Box
                       bg={isAdminMessage ? "blue.500" : "white"}
                       color={isAdminMessage ? "white" : "black"}
@@ -747,7 +765,9 @@ export default function ChatDetail() {
                           {msg.is_edited && (
                             <Text
                               fontSize="xs"
-                              color={isAdminMessage ? "whiteAlpha.700" : "gray.500"}
+                              color={
+                                isAdminMessage ? "whiteAlpha.700" : "gray.500"
+                              }
                               mt={1}
                             >
                               (tahrirlangan)
@@ -759,10 +779,18 @@ export default function ChatDetail() {
                       {msg.type === "voice" && msg.file_url && (
                         <HStack spacing={3}>
                           <IconButton
-                            icon={playingAudioId === msg.id ? <Pause size={18} /> : <Play size={18} />}
+                            icon={
+                              playingAudioId === msg.id ? (
+                                <Pause size={18} />
+                              ) : (
+                                <Play size={18} />
+                              )
+                            }
                             size="sm"
                             colorScheme={isAdminMessage ? "whiteAlpha" : "blue"}
-                            onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
+                            onClick={() =>
+                              toggleAudioPlayback(msg.id, msg.file_url)
+                            }
                             aria-label="Play/Pause"
                           />
                           <Text fontSize="sm">Ovozli xabar</Text>
@@ -772,7 +800,10 @@ export default function ChatDetail() {
                       {msg.type === "file" && msg.file_url && (
                         <HStack mt={2}>
                           <Paperclip size={16} />
-                          <Text fontSize="sm" color={isAdminMessage ? "blue.100" : "blue.600"}>
+                          <Text
+                            fontSize="sm"
+                            color={isAdminMessage ? "blue.100" : "blue.600"}
+                          >
                             Fayl: {msg.file_url.split("/").pop()}
                           </Text>
                         </HStack>
@@ -801,12 +832,18 @@ export default function ChatDetail() {
                           />
                           <MenuList>
                             {msg.type === "text" && (
-                              <MenuItem icon={<Copy size={16} />} onClick={() => handleCopyMessage(msg.content)}>
+                              <MenuItem
+                                icon={<Copy size={16} />}
+                                onClick={() => handleCopyMessage(msg.content)}
+                              >
                                 Nusxalash
                               </MenuItem>
                             )}
                             {canEdit && (
-                              <MenuItem icon={<Edit2 size={16} />} onClick={() => handleEditClick(msg)}>
+                              <MenuItem
+                                icon={<Edit2 size={16} />}
+                                onClick={() => handleEditClick(msg)}
+                              >
                                 Tahrirlash
                               </MenuItem>
                             )}
@@ -826,7 +863,10 @@ export default function ChatDetail() {
                   </Box>
 
                   {/* Vaqt va status */}
-                  <HStack mt={1} alignSelf={isAdminMessage ? "flex-end" : "flex-start"}>
+                  <HStack
+                    mt={1}
+                    alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
+                  >
                     <Text fontSize="xs" color="gray.500">
                       {new Date(msg.created_at).toLocaleTimeString("uz-UZ", {
                         hour: "2-digit",
@@ -861,7 +901,12 @@ export default function ChatDetail() {
                   {formatTime(recordingTime)}
                 </Text>
               </HStack>
-              <Progress value={(recordingTime / 60) * 100} w="full" colorScheme="red" size="sm" />
+              <Progress
+                value={(recordingTime / 60) * 100}
+                w="full"
+                colorScheme="red"
+                size="sm"
+              />
               <HStack spacing={2}>
                 <Button colorScheme="red" size="sm" onClick={cancelRecording}>
                   Bekor qilish
@@ -886,10 +931,20 @@ export default function ChatDetail() {
                 aria-label="Preview"
               />
               <Text flex={1}>Ovozli xabar ({formatTime(recordingTime)})</Text>
-              <Button size="sm" colorScheme="red" variant="ghost" onClick={() => setAudioBlob(null)}>
+              <Button
+                size="sm"
+                colorScheme="red"
+                variant="ghost"
+                onClick={() => setAudioBlob(null)}
+              >
                 O'chirish
               </Button>
-              <Button size="sm" colorScheme="blue" onClick={sendVoiceMessage} isLoading={sending}>
+              <Button
+                size="sm"
+                colorScheme="blue"
+                onClick={sendVoiceMessage}
+                isLoading={sending}
+              >
                 Yuborish
               </Button>
             </HStack>
@@ -901,13 +956,20 @@ export default function ChatDetail() {
                 placeholder="Xabar yozing..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && !sending && handleSendMessage()}
+                onKeyPress={(e) =>
+                  e.key === "Enter" && !sending && handleSendMessage()
+                }
                 disabled={sending}
               />
               <InputRightElement width="6rem">
                 <HStack spacing={1}>
                   <Tooltip label="Fayl yuklash">
-                    <IconButton icon={<Paperclip size={18} />} variant="ghost" size="sm" aria-label="Fayl" />
+                    <IconButton
+                      icon={<Paperclip size={18} />}
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Fayl"
+                    />
                   </Tooltip>
                   <Tooltip label="Ovozli xabar">
                     <IconButton
@@ -952,7 +1014,11 @@ export default function ChatDetail() {
             <Button variant="ghost" mr={3} onClick={onEditClose}>
               Bekor qilish
             </Button>
-            <Button colorScheme="blue" onClick={handleEditSubmit} isDisabled={!editingContent.trim()}>
+            <Button
+              colorScheme="blue"
+              onClick={handleEditSubmit}
+              isDisabled={!editingContent.trim()}
+            >
               Saqlash
             </Button>
           </ModalFooter>
@@ -966,7 +1032,9 @@ export default function ChatDetail() {
           <ModalHeader>Xabarni o'chirish</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <Text>Ushbu xabarni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.</Text>
+            <Text>
+              Ushbu xabarni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.
+            </Text>
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={onDeleteClose}>
