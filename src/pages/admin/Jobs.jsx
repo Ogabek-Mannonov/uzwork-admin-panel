@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// src/pages/admin/AdminJobs.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Heading,
@@ -28,39 +29,51 @@ import api from "../../lib/api";
 
 export default function AdminJobs() {
   const [jobs, setJobs] = useState([]);
-  const [filteredJobs, setFilteredJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedBoost, setSelectedBoost] = useState("all");
 
-  // Sana formatlash: 2026 M01 13 15:28 → 13.01.2026
   const formatCreatedAt = (dateStr) => {
     if (!dateStr || typeof dateStr !== "string") return "—";
 
-    // 2026 M01 13 15:28 yoki shunga o'xshash formatlarni aniqlash
-    const match = dateStr.match(/^(\d{4})\s*M?0?(\d{1,2})\s*(\d{1,2})/);
+    const d = new Date(dateStr);
+    if (!Number.isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      return `${dd}.${mm}.${yyyy}`;
+    }
 
+    const match = dateStr.match(/^(\d{4})\s*M?0?(\d{1,2})\s*(\d{1,2})/);
     if (match) {
       const [, year, month, day] = match;
       return `${day.padStart(2, "0")}.${month.padStart(2, "0")}.${year}`;
-      // Natija: 13.01.2026
-    }
-
-    // Agar boshqa format bo'lsa, birinchi 10 ta belgini olib, nuqta bilan ajratamiz
-    const cleaned = dateStr
-      .replace(/\D/g, " ")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
-
-    if (cleaned.length >= 3) {
-      const [y, m, d] = cleaned;
-      return `${d.padStart(2, "0")}.${m.padStart(2, "0")}.${y}`;
     }
 
     return dateStr.slice(0, 10).replace(/-/g, ".") || "—";
+  };
+
+  const buildBudgetLabel = (job) => {
+    // Agar backend allaqachon string budget yuborsa
+    if (job?.budget && typeof job.budget === "string") return job.budget;
+
+    const min = job?.budget_min ?? job?.budgetMin;
+    const max = job?.budget_max ?? job?.budgetMax;
+    const currency = job?.currency || "UZS";
+
+    if (min != null && max != null) {
+      const minN = Number(min);
+      const maxN = Number(max);
+      if (!Number.isNaN(minN) && !Number.isNaN(maxN)) {
+        return `${minN.toLocaleString()} - ${maxN.toLocaleString()} ${currency}`;
+      }
+      return `${min} - ${max} ${currency}`;
+    }
+
+    return "Belgilanmagan";
   };
 
   useEffect(() => {
@@ -68,10 +81,48 @@ export default function AdminJobs() {
       try {
         setLoading(true);
         setError(null);
-        const res = await api("/admin/jobs");
-        const allJobs = res.data.jobs || [];
-        setJobs(allJobs);
-        setFilteredJobs(allJobs);
+
+        const res = await api("/projects?status=all&limit=1000");
+
+        // api wrapper ba'zan res.data emas, to'g'ridan-to'g'ri payload qaytaradi
+        const payload = res?.data ?? res;
+
+        const allJobs =
+          payload?.data?.projects ||
+          payload?.projects ||
+          payload?.data?.data?.projects ||
+          [];
+
+        const normalized = (allJobs || []).map((j) => {
+          const clientName =
+            `${j.client_first_name || ""} ${j.client_last_name || ""}`.trim() ||
+            j.client_name ||
+            j.client_username ||
+            "Noma'lum";
+
+          const isBoosted = Boolean(j.boosted ?? j.is_boosted ?? j.isBoosted ?? false);
+
+          const proposalsCount = Number(
+            j.proposals_count ??
+              j.proposalsCount ??
+              j.offers_count ??
+              j.offersCount ??
+              j.bids_count ??
+              j.bidsCount ??
+              0
+          );
+
+          return {
+            ...j,
+            clientName,
+            isBoosted,
+            proposalsCount: Number.isNaN(proposalsCount) ? 0 : proposalsCount,
+            budgetLabel: buildBudgetLabel(j),
+          };
+        });
+
+        console.log("projects sample:", normalized?.[0]);
+        setJobs(normalized);
       } catch (err) {
         console.error("Loyihalarni olishda xato:", err);
         setError("Loyihalarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
@@ -83,15 +134,15 @@ export default function AdminJobs() {
     fetchJobs();
   }, []);
 
-  useEffect(() => {
+  const filteredJobs = useMemo(() => {
     let result = [...jobs];
 
     if (searchTerm.trim()) {
-      const lowerSearch = searchTerm.toLowerCase();
+      const lower = searchTerm.toLowerCase();
       result = result.filter(
         (job) =>
-          (job.title || "").toLowerCase().includes(lowerSearch) ||
-          (job.client_name || "").toLowerCase().includes(lowerSearch)
+          (job.title || "").toLowerCase().includes(lower) ||
+          (job.clientName || "").toLowerCase().includes(lower)
       );
     }
 
@@ -100,12 +151,12 @@ export default function AdminJobs() {
     }
 
     if (selectedBoost !== "all") {
-      const isBoosted = selectedBoost === "boosted";
-      result = result.filter((job) => job.is_boosted === isBoosted);
+      const wantBoosted = selectedBoost === "boosted";
+      result = result.filter((job) => Boolean(job.isBoosted) === wantBoosted);
     }
 
-    setFilteredJobs(result);
-  }, [searchTerm, selectedStatus, selectedBoost, jobs]);
+    return result;
+  }, [jobs, searchTerm, selectedStatus, selectedBoost]);
 
   const getStatusBadge = (status) => {
     const schemes = {
@@ -114,17 +165,16 @@ export default function AdminJobs() {
       completed: "purple",
       cancelled: "red",
     };
-
     const labels = {
-      open: "Ochiq",
-      in_progress: "Jarayonda",
-      completed: "Tugallangan",
-      cancelled: "Bekor qilingan",
+      open: "OCHIQ",
+      in_progress: "JARAYONDA",
+      completed: "TUGALLANGAN",
+      cancelled: "BEKOR",
     };
 
     return (
       <Badge colorScheme={schemes[status] || "gray"}>
-        {labels[status] || status}
+        {labels[status] || status || "—"}
       </Badge>
     );
   };
@@ -199,34 +249,37 @@ export default function AdminJobs() {
               <Th>Amallar</Th>
             </Tr>
           </Thead>
+
           <Tbody>
             {filteredJobs.length > 0 ? (
               filteredJobs.map((job) => (
                 <Tr key={job.id}>
                   <Td>
-                    {job.is_boosted && <StarIcon color="yellow.400" mr={2} />}
+                    {job.isBoosted && <StarIcon color="yellow.400" mr={2} />}
                     {job.title || "—"}
                   </Td>
+
                   <Td>
                     <HStack>
-                      <Avatar name={job.client_name || "?"} size="xs" />
-                      <Text>{job.client_name || "Noma'lum"}</Text>
+                      <Avatar name={job.clientName || "?"} size="xs" />
+                      <Text>{job.clientName || "Noma'lum"}</Text>
                     </HStack>
                   </Td>
-                  <Td>
-                    {job.budget_min && job.budget_max
-                      ? `${job.budget_min.toLocaleString()} - ${job.budget_max.toLocaleString()} ${job.currency || "UZS"}`
-                      : "Belgilanmagan"}
-                  </Td>
+
+                  <Td>{job.budgetLabel}</Td>
+
                   <Td textAlign="center">
                     <Badge colorScheme="purple" variant="subtle" fontSize="sm" px={3} py={1}>
-                      {job.proposals_count ?? 0} ta
+                      {job.proposalsCount} ta
                     </Badge>
                   </Td>
+
                   <Td>{getStatusBadge(job.status)}</Td>
+
                   <Td fontSize="sm" whiteSpace="nowrap">
                     {formatCreatedAt(job.created_at)}
                   </Td>
+
                   <Td>
                     <HStack spacing={1}>
                       <IconButton
