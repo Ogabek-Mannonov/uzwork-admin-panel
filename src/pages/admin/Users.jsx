@@ -36,12 +36,14 @@ export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("all");
 
+  // ✅ NEW: status filter
+  const [selectedStatus, setSelectedStatus] = useState("all"); // all | active | blocked
+
   const toast = useToast();
 
   const normalizePayload = (res) => {
     const payload = res?.data ?? res;
 
-    // backend: { success, data: { users: [] } }
     const list =
       payload?.data?.users ||
       payload?.users ||
@@ -60,8 +62,7 @@ export default function AdminUsers() {
         const res = await api("/admin/users");
         const allUsers = normalizePayload(res);
 
-        // status bo‘lmasa ham active deb ko‘rsatamiz (lekin backendda status bor bo‘lishi kerak)
-        const normalized = allUsers.map(u => ({
+        const normalized = allUsers.map((u) => ({
           ...u,
           status: u.status ?? "active",
         }));
@@ -77,28 +78,6 @@ export default function AdminUsers() {
 
     fetchUsers();
   }, []);
-
-  const filteredUsers = useMemo(() => {
-    let result = [...users];
-
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      result = result.filter((u) => {
-        const fullName = `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
-        return (
-          fullName.includes(q) ||
-          (u.username || "").toLowerCase().includes(q) ||
-          (u.email || "").toLowerCase().includes(q)
-        );
-      });
-    }
-
-    if (selectedRole !== "all") {
-      result = result.filter((u) => u.role === selectedRole);
-    }
-
-    return result;
-  }, [users, searchTerm, selectedRole]);
 
   const toggleStatus = async (userId, nextStatus) => {
     try {
@@ -145,6 +124,35 @@ export default function AdminUsers() {
     );
   };
 
+  const filteredUsers = useMemo(() => {
+    let result = [...users];
+
+    // search
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter((u) => {
+        const fullName = `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
+        return (
+          fullName.includes(q) ||
+          (u.username || "").toLowerCase().includes(q) ||
+          (u.email || "").toLowerCase().includes(q)
+        );
+      });
+    }
+
+    // role filter
+    if (selectedRole !== "all") {
+      result = result.filter((u) => u.role === selectedRole);
+    }
+
+    // ✅ NEW: status filter
+    if (selectedStatus !== "all") {
+      result = result.filter((u) => (u.status ?? "active") === selectedStatus);
+    }
+
+    return result;
+  }, [users, searchTerm, selectedRole, selectedStatus]);
+
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
@@ -171,7 +179,8 @@ export default function AdminUsers() {
         Foydalanuvchilar
       </Heading>
 
-      <HStack mb={6} spacing={4}>
+      {/* Filters */}
+      <HStack mb={6} spacing={4} wrap="wrap">
         <InputGroup maxW="400px">
           <InputLeftElement>
             <SearchIcon color="gray.300" />
@@ -192,6 +201,17 @@ export default function AdminUsers() {
           <option value="freelancer">Freelancer</option>
           <option value="client">Client</option>
           <option value="admin">Admin</option>
+        </Select>
+
+        {/* ✅ NEW: Status select */}
+        <Select
+          maxW="200px"
+          value={selectedStatus}
+          onChange={(e) => setSelectedStatus(e.target.value)}
+        >
+          <option value="all">Barcha statuslar</option>
+          <option value="active">Faol</option>
+          <option value="blocked">Bloklangan</option>
         </Select>
       </HStack>
 
@@ -234,7 +254,6 @@ export default function AdminUsers() {
 
                   <Td>
                     <HStack spacing={2}>
-                      {/* Edit -> detail page */}
                       <IconButton
                         as={Link}
                         to={`/admin/users/${user.id}`}
