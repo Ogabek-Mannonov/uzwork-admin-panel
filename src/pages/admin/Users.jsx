@@ -1,5 +1,5 @@
 // src/pages/admin/Users.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
   Heading,
@@ -22,6 +22,7 @@ import {
   Spinner,
   Alert,
   AlertIcon,
+  useToast,
 } from "@chakra-ui/react";
 import { SearchIcon, EditIcon, NotAllowedIcon, CheckCircleIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
@@ -29,11 +30,26 @@ import api from "../../lib/api";
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]); // filtrlangan ro‘yxat
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState(""); // qidiruv so‘zi
-  const [selectedRole, setSelectedRole] = useState("all"); // tanlangan role
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRole, setSelectedRole] = useState("all");
+
+  const toast = useToast();
+
+  const normalizePayload = (res) => {
+    const payload = res?.data ?? res;
+
+    // backend: { success, data: { users: [] } }
+    const list =
+      payload?.data?.users ||
+      payload?.users ||
+      payload?.data?.data?.users ||
+      [];
+
+    return Array.isArray(list) ? list : [];
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -42,10 +58,15 @@ export default function AdminUsers() {
         setError(null);
 
         const res = await api("/admin/users");
-        const allUsers = res.data.users || [];
+        const allUsers = normalizePayload(res);
 
-        setUsers(allUsers);
-        setFilteredUsers(allUsers); // boshida hammasi ko‘rinadi
+        // status bo‘lmasa ham active deb ko‘rsatamiz (lekin backendda status bor bo‘lishi kerak)
+        const normalized = allUsers.map(u => ({
+          ...u,
+          status: u.status ?? "active",
+        }));
+
+        setUsers(normalized);
       } catch (err) {
         console.error("Foydalanuvchilarni olishda xato:", err);
         setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
@@ -57,29 +78,72 @@ export default function AdminUsers() {
     fetchUsers();
   }, []);
 
-  // Qidiruv va role filtri (real vaqt rejimida)
-  useEffect(() => {
+  const filteredUsers = useMemo(() => {
     let result = [...users];
 
-    // Qidiruv bo‘yicha filter (ism, username, email)
     if (searchTerm.trim()) {
-      const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter((user) => {
+      const q = searchTerm.toLowerCase();
+      result = result.filter((u) => {
+        const fullName = `${u.first_name || ""} ${u.last_name || ""}`.toLowerCase();
         return (
-          `${user.first_name || ''} ${user.last_name || ''}`.toLowerCase().includes(lowerSearch) ||
-          (user.username || '').toLowerCase().includes(lowerSearch) ||
-          (user.email || '').toLowerCase().includes(lowerSearch)
+          fullName.includes(q) ||
+          (u.username || "").toLowerCase().includes(q) ||
+          (u.email || "").toLowerCase().includes(q)
         );
       });
     }
 
-    // Role bo‘yicha filter
     if (selectedRole !== "all") {
-      result = result.filter((user) => user.role === selectedRole);
+      result = result.filter((u) => u.role === selectedRole);
     }
 
-    setFilteredUsers(result);
-  }, [searchTerm, selectedRole, users]);
+    return result;
+  }, [users, searchTerm, selectedRole]);
+
+  const toggleStatus = async (userId, nextStatus) => {
+    try {
+      const res = await api.patch(`/admin/users/${userId}/status`, { status: nextStatus });
+
+      const payload = res?.data ?? res;
+      const updated = payload?.data?.user || payload?.user;
+
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, ...updated } : u))
+      );
+
+      toast({
+        title: "OK",
+        description: nextStatus === "blocked" ? "User bloklandi" : "User faollashtirildi",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (e) {
+      console.error("Status update error:", e);
+      toast({
+        title: "Xato",
+        description: "Status o‘zgartirishda xato",
+        status: "error",
+        duration: 2500,
+        isClosable: true,
+      });
+    }
+  };
+
+  const roleBadge = (role) => {
+    const label = role === "admin" ? "Admin" : role === "freelancer" ? "Freelancer" : "Client";
+    const color = role === "admin" ? "purple" : role === "freelancer" ? "blue" : "green";
+    return <Badge colorScheme={color}>{label}</Badge>;
+  };
+
+  const statusBadge = (status) => {
+    const isActive = status === "active";
+    return (
+      <Badge colorScheme={isActive ? "green" : "red"}>
+        {isActive ? "Faol" : "Bloklangan"}
+      </Badge>
+    );
+  };
 
   if (loading) {
     return (
@@ -107,7 +171,6 @@ export default function AdminUsers() {
         Foydalanuvchilar
       </Heading>
 
-      {/* Qidiruv va filter */}
       <HStack mb={6} spacing={4}>
         <InputGroup maxW="400px">
           <InputLeftElement>
@@ -132,7 +195,6 @@ export default function AdminUsers() {
         </Select>
       </HStack>
 
-      {/* Jadval */}
       <Table variant="simple" size="lg">
         <Thead>
           <Tr bg="gray.50">
@@ -144,44 +206,69 @@ export default function AdminUsers() {
             <Th>Amallar</Th>
           </Tr>
         </Thead>
+
         <Tbody>
           {filteredUsers.length > 0 ? (
-            filteredUsers.map((user) => (
-              <Tr key={user.id}>
-                <Td>
-                  <Link to={`/admin/users/${user.id}`}>
-                    <Flex align="center" gap={3} cursor="pointer" _hover={{ opacity: 0.8 }}>
-                      <Avatar name={`${user.first_name || ''} ${user.last_name || ''}`} size="md" />
-                      <Text fontWeight="medium" color="blue.600">
-                        {user.first_name} {user.last_name}
-                      </Text>
-                    </Flex>
-                  </Link>
-                </Td>
-                <Td>{user.username}</Td>
-                <Td>{user.email}</Td>
-                <Td>
-                  <Badge colorScheme={user.role === "admin" ? "purple" : user.role === "freelancer" ? "blue" : "green"}>
-                    {user.role === "freelancer" ? "Freelancer" : user.role === "client" ? "Client" : "Admin"}
-                  </Badge>
-                </Td>
-                <Td>
-                  <Badge colorScheme={user.status === "active" ? "green" : "red"}>
-                    {user.status === "active" ? "Faol" : "Bloklangan"}
-                  </Badge>
-                </Td>
-                <Td>
-                  <HStack spacing={2}>
-                    <IconButton icon={<EditIcon />} size="sm" colorScheme="blue" variant="ghost" />
-                    {user.status === "active" ? (
-                      <IconButton icon={<NotAllowedIcon />} size="sm" colorScheme="red" variant="ghost" />
-                    ) : (
-                      <IconButton icon={<CheckCircleIcon />} size="sm" colorScheme="green" variant="ghost" />
-                    )}
-                  </HStack>
-                </Td>
-              </Tr>
-            ))
+            filteredUsers.map((user) => {
+              const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Noma'lum";
+              const isActive = (user.status ?? "active") === "active";
+
+              return (
+                <Tr key={user.id}>
+                  <Td>
+                    <Link to={`/admin/users/${user.id}`}>
+                      <Flex align="center" gap={3} cursor="pointer" _hover={{ opacity: 0.8 }}>
+                        <Avatar name={fullName} size="md" />
+                        <Text fontWeight="medium" color="blue.600">
+                          {fullName}
+                        </Text>
+                      </Flex>
+                    </Link>
+                  </Td>
+
+                  <Td>{user.username || "—"}</Td>
+                  <Td>{user.email || "—"}</Td>
+
+                  <Td>{roleBadge(user.role)}</Td>
+                  <Td>{statusBadge(user.status ?? "active")}</Td>
+
+                  <Td>
+                    <HStack spacing={2}>
+                      {/* Edit -> detail page */}
+                      <IconButton
+                        as={Link}
+                        to={`/admin/users/${user.id}`}
+                        icon={<EditIcon />}
+                        size="sm"
+                        colorScheme="blue"
+                        variant="ghost"
+                        aria-label="Tahrirlash"
+                      />
+
+                      {isActive ? (
+                        <IconButton
+                          icon={<NotAllowedIcon />}
+                          size="sm"
+                          colorScheme="red"
+                          variant="ghost"
+                          aria-label="Bloklash"
+                          onClick={() => toggleStatus(user.id, "blocked")}
+                        />
+                      ) : (
+                        <IconButton
+                          icon={<CheckCircleIcon />}
+                          size="sm"
+                          colorScheme="green"
+                          variant="ghost"
+                          aria-label="Faollashtirish"
+                          onClick={() => toggleStatus(user.id, "active")}
+                        />
+                      )}
+                    </HStack>
+                  </Td>
+                </Tr>
+              );
+            })
           ) : (
             <Tr>
               <Td colSpan={6} textAlign="center" color="gray.500">
