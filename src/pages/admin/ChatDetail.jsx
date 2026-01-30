@@ -39,7 +39,6 @@ import {
   ArrowLeft,
   Send,
   Paperclip,
-  AlertTriangle,
   Mic,
   Play,
   Pause,
@@ -48,13 +47,14 @@ import {
   Trash2,
   Copy,
 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import api from "../../lib/api";
 import socket from "../../utils/socket";
 
 export default function ChatDetail() {
   const { chatId } = useParams();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const [messages, setMessages] = useState([]);
   const [chatInfo, setChatInfo] = useState({
@@ -100,6 +100,14 @@ export default function ChatDetail() {
     y: 0,
     message: null,
   });
+
+  // ✅ Dispute modal states (YANGI)
+  const {
+    isOpen: isDisputeOpen,
+    onClose: onDisputeClose,
+  } = useDisclosure();
+  const [disputeReason, setDisputeReason] = useState("");
+  const [disputeCreating, setDisputeCreating] = useState(false);
 
   // ====== Current user info / role ======
   const normalizeId = (id) => (id == null ? null : String(id));
@@ -578,6 +586,60 @@ export default function ChatDetail() {
     });
   }, [messages]);
 
+  // ✅ CREATE DISPUTE (YANGI)
+  const createDispute = async () => {
+    if (!disputeReason.trim()) {
+      toast({
+        title: "Sabab kiriting",
+        description: "Dispute ochish uchun reason majburiy",
+        status: "warning",
+        duration: 2500,
+      });
+      return;
+    }
+
+    try {
+      setDisputeCreating(true);
+
+      const res = await api.post("/disputes", {
+        chat_id: chatId,
+        reason: disputeReason.trim(),
+        evidence_files: [],
+      });
+
+      const payload = res?.data ?? res;
+      const dispute = payload?.data?.dispute || payload?.dispute;
+
+      toast({
+        title: "Dispute ochildi",
+        description: "Nizo yaratildi",
+        status: "success",
+        duration: 2000,
+      });
+
+      onDisputeClose();
+      setDisputeReason("");
+
+      if (dispute?.id) navigate(`/admin/disputes/${dispute.id}`);
+    } catch (e) {
+      console.error("createDispute error:", e);
+
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        "Dispute ochishda xato";
+
+      toast({
+        title: "Xato",
+        description: msg,
+        status: "error",
+        duration: 3500,
+      });
+    } finally {
+      setDisputeCreating(false);
+    }
+  };
+
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
@@ -684,9 +746,15 @@ export default function ChatDetail() {
               </Box>
             </Flex>
 
-            <Button leftIcon={<AlertTriangle size={18} />} colorScheme="red" variant="outline">
+            {/* ✅ Dispute button (modal) */}
+            {/* <Button
+              leftIcon={<AlertTriangle size={18} />}
+              colorScheme="red"
+              variant="outline"
+              onClick={onDisputeOpen}
+            >
               Dispute ochish
-            </Button>
+            </Button> */}
           </Flex>
         </CardHeader>
       </Card>
@@ -873,17 +941,27 @@ export default function ChatDetail() {
                           />
                           <MenuList>
                             {msg.type === "text" && (
-                              <MenuItem icon={<Copy size={16} />} onClick={() => handleCopyMessage(msg.content)}>
+                              <MenuItem
+                                icon={<Copy size={16} />}
+                                onClick={() => handleCopyMessage(msg.content)}
+                              >
                                 Nusxalash
                               </MenuItem>
                             )}
                             {canEdit && (
-                              <MenuItem icon={<Edit2 size={16} />} onClick={() => handleEditClick(msg)}>
+                              <MenuItem
+                                icon={<Edit2 size={16} />}
+                                onClick={() => handleEditClick(msg)}
+                              >
                                 Tahrirlash
                               </MenuItem>
                             )}
                             {canDelete && (
-                              <MenuItem icon={<Trash2 size={16} />} color="red.500" onClick={() => handleDeleteClick(msg)}>
+                              <MenuItem
+                                icon={<Trash2 size={16} />}
+                                color="red.500"
+                                onClick={() => handleDeleteClick(msg)}
+                              >
                                 O'chirish
                               </MenuItem>
                             )}
@@ -1098,6 +1176,39 @@ export default function ChatDetail() {
           )}
         </MenuList>
       </Menu>
+
+      {/* ✅ DISPUTE MODAL (YANGI) */}
+      <Modal isOpen={isDisputeOpen} onClose={onDisputeClose} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Dispute ochish</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text fontSize="sm" color="gray.600" mb={2}>
+              Nizo sababi (reason) ni yozing:
+            </Text>
+            <Textarea
+              value={disputeReason}
+              onChange={(e) => setDisputeReason(e.target.value)}
+              placeholder="Masalan: ish bajarilmadi, deadline o'tdi, kelishuv buzildi..."
+              rows={5}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onDisputeClose}>
+              Bekor
+            </Button>
+            <Button
+              colorScheme="red"
+              onClick={createDispute}
+              isLoading={disputeCreating}
+              isDisabled={!disputeReason.trim()}
+            >
+              Dispute ochish
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
