@@ -1,17 +1,13 @@
-// src/pages/admin/PaymentDetail.jsx
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Heading,
   Text,
   Badge,
-  Button,
   Flex,
-  Avatar,
   Card,
   CardHeader,
   CardBody,
-  SimpleGrid,
   Divider,
   VStack,
   HStack,
@@ -24,188 +20,225 @@ import {
   Th,
   Td,
   IconButton,
+  Spinner,
+  Alert,
+  AlertIcon,
+  Avatar,
+  SimpleGrid,
 } from "@chakra-ui/react";
-import { ArrowLeftIcon, CheckCircleIcon, CloseIcon } from "@chakra-ui/icons";
+import { ArrowLeftIcon } from "@chakra-ui/icons";
 import { useParams, Link } from "react-router-dom";
+import { fetchPaymentDetail } from "../../lib/payments";
+
+const typeMeta = {
+  deposit: { color: "green", label: "Depozit" },
+  withdrawal: { color: "orange", label: "Yechib olish" },
+  escrow_hold: { color: "blue", label: "Escrow hold" },
+  escrow_release: { color: "blue", label: "Escrow chiqarish" },
+  fee: { color: "purple", label: "Platforma haqi" },
+  refund: { color: "red", label: "Qaytarish" },
+};
+
+const statusMeta = {
+  completed: { color: "green", label: "Muvaffaqiyatli" },
+  pending: { color: "yellow", label: "Kutilmoqda" },
+  in_progress: { color: "blue", label: "Jarayonda" },
+  failed: { color: "red", label: "Muvaffaqiyatsiz" },
+};
+
+const moneyUZS = (amount) => {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return String(amount ?? "-");
+  return `${new Intl.NumberFormat("uz-UZ").format(n)} so'm`;
+};
+
+function UserMiniCard({ title, user }) {
+  if (!user) return null;
+
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
+
+  return (
+    <Card>
+      <CardHeader>
+        <Heading size="sm">{title}</Heading>
+      </CardHeader>
+      <CardBody>
+        <Flex align="center" gap={3}>
+          <Avatar name={fullName || user.username || "User"} size="md" />
+          <Box>
+            <Text fontWeight="semibold">{fullName || "—"}</Text>
+            <Text color="gray.600">@{user.username || "—"}</Text>
+            {user.email && <Text fontSize="sm" color="gray.600">{user.email}</Text>}
+            {user.phone && <Text fontSize="sm" color="gray.600">{user.phone}</Text>}
+          </Box>
+        </Flex>
+      </CardBody>
+    </Card>
+  );
+}
 
 export default function PaymentDetail() {
-  const { paymentId } = useParams(); // URL dan payment ID ni olamiz
+  const { paymentId } = useParams();
 
-  // Mock data – keyin backend dan olamiz
-  const payment = {
-    id: paymentId || "3",
-    user: {
-      name: "Ali Pro",
-      username: "ali_pro",
-      avatar: null,
-      email: "ali@example.com",
-      phone: "+998901234567",
-    },
-    type: "withdrawal",
-    amount: "2,000,000 so‘m",
-    gateway: "Click",
-    gatewayTransactionId: "CLICK-123456789",
-    status: "pending",
-    requestedAt: "2026-01-03 14:30",
-    processedAt: null,
-    notes: "Bank kartaga yechib olish so‘rovi",
-    log: [
-      { time: "2026-01-03 14:30", action: "So‘rov yuborildi", by: "Foydalanuvchi" },
-      { time: "2026-01-03 15:00", action: "Admin ko‘rib chiqmoqda", by: "Admin" },
-    ],
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [tx, setTx] = useState(null);
+  const [users, setUsers] = useState({ owner: null, client: null, freelancer: null });
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetchPaymentDetail(paymentId);
+      if (!res.success) throw new Error(res.message || "Xatolik");
+
+      setTx(res.data.transaction);
+      setUsers(res.data.users || { owner: null, client: null, freelancer: null });
+    } catch (e) {
+      setError(e?.response?.data?.message || e.message || "Xatolik yuz berdi");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getTypeBadge = (type) => {
-    const colorScheme = {
-      deposit: "green",
-      withdrawal: "orange",
-      escrow_release: "blue",
-      fee: "purple",
-      refund: "red",
-    };
-    const label = {
-      deposit: "Depozit",
-      withdrawal: "Yechib olish",
-      escrow_release: "Escrow chiqarish",
-      fee: "Platforma haqi",
-      refund: "Qaytarish",
-    };
-    return <Badge colorScheme={colorScheme[type] || "gray"} fontSize="md" px={3} py={1} borderRadius="full">
-      {label[type] || type}
-    </Badge>;
-  };
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentId]);
 
-  const getStatusBadge = (status) => {
-    const colorScheme = {
-      completed: "green",
-      pending: "yellow",
-      in_progress: "blue",
-      failed: "red",
-    };
-    const label = {
-      completed: "Muvaffaqiyatli",
-      pending: "Kutilmoqda",
-      in_progress: "Jarayonda",
-      failed: "Muvaffaqiyatsiz",
-    };
-    return <Badge colorScheme={colorScheme[status] || "gray"} fontSize="md" px={3} py={1} borderRadius="full">
-      {label[status] || status}
-    </Badge>;
-  };
+  const typeBadge = useMemo(() => {
+    if (!tx) return null;
+    const meta = typeMeta[tx.type] || { color: "gray", label: tx.type };
+    return (
+      <Badge colorScheme={meta.color} fontSize="md" px={3} py={1} borderRadius="full">
+        {meta.label}
+      </Badge>
+    );
+  }, [tx]);
+
+  const statusBadge = useMemo(() => {
+    if (!tx) return null;
+    const meta = statusMeta[tx.status] || { color: "gray", label: tx.status };
+    return (
+      <Badge colorScheme={meta.color} fontSize="md" px={3} py={1} borderRadius="full">
+        {meta.label}
+      </Badge>
+    );
+  }, [tx]);
 
   return (
     <Box>
-      {/* Back tugmasi */}
       <Flex align="center" mb={6} gap={4}>
         <Link to="/admin/payments">
-          <IconButton icon={<ArrowLeftIcon />} colorScheme="gray" variant="ghost" size="lg" />
+          <IconButton icon={<ArrowLeftIcon />} colorScheme="gray" variant="ghost" size="lg" aria-label="Back" />
         </Link>
         <Heading size="xl">To‘lov tafsilotlari</Heading>
-        <Badge fontSize="lg" colorScheme="orange">Transaction #{payment.id}</Badge>
+        <Badge fontSize="lg" colorScheme="orange">Transaction #{paymentId}</Badge>
       </Flex>
 
-      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={8}>
-        {/* Umumiy ma’lumotlar */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">Umumiy ma’lumotlar</Heading>
-          </CardHeader>
-          <CardBody>
-            <VStack align="stretch" spacing={4}>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">Foydalanuvchi</Text>
-                <Flex align="center" gap={3}>
-                  <Avatar name={payment.user.name} size="sm" />
-                  <Box textAlign="right">
-                    <Text fontWeight="semibold">{payment.user.name}</Text>
-                    <Text fontSize="sm" color="gray.600">@{payment.user.username}</Text>
-                  </Box>
-                </Flex>
-              </Flex>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">Turi</Text>
-                {getTypeBadge(payment.type)}
-              </Flex>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">Summa</Text>
-                <Text fontSize="xl" fontWeight="bold">{payment.amount}</Text>
-              </Flex>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">Gateway</Text>
-                <Tag colorScheme="teal" variant="subtle">
-                  <TagLabel>{payment.gateway}</TagLabel>
-                </Tag>
-              </Flex>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">Status</Text>
-                {getStatusBadge(payment.status)}
-              </Flex>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">So‘rov vaqti</Text>
-                <Text>{payment.requestedAt}</Text>
-              </Flex>
-            </VStack>
-          </CardBody>
-        </Card>
-
-        {/* Gateway detallari */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">Gateway detallari</Heading>
-          </CardHeader>
-          <CardBody>
-            <VStack align="stretch" spacing={4}>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">Gateway Transaction ID</Text>
-                <Text fontWeight="semibold">{payment.gatewayTransactionId || "-"}</Text>
-              </Flex>
-              <Flex justify="space-between">
-                <Text fontWeight="medium">Izoh</Text>
-                <Text>{payment.notes || "-"}</Text>
-              </Flex>
-            </VStack>
-          </CardBody>
-        </Card>
-      </SimpleGrid>
-
-      {/* Loglar */}
-      <Card mb={8}>
-        <CardHeader>
-          <Heading size="md">Tranzaksiya loglari</Heading>
-        </CardHeader>
-        <CardBody>
-          <Table variant="simple">
-            <Thead>
-              <Tr>
-                <Th>Vaqti</Th>
-                <Th>Amal</Th>
-                <Th>Kim tomonidan</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {payment.log.map((log, index) => (
-                <Tr key={index}>
-                  <Td>{log.time}</Td>
-                  <Td>{log.action}</Td>
-                  <Td>{log.by}</Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </CardBody>
-      </Card>
-
-      {/* Amallar tugmalari (faqat pending bo‘lganda) */}
-      {payment.status === "pending" && (
-        <HStack spacing={6} justify="center" mt={10}>
-          <Button leftIcon={<CheckCircleIcon />} colorScheme="green" size="lg">
-            Tasdiqlash
-          </Button>
-          <Button leftIcon={<CloseIcon />} colorScheme="red" size="lg">
-            Rad etish
-          </Button>
-        </HStack>
+      {error && (
+        <Alert status="error" mb={4}>
+          <AlertIcon />
+          {error}
+        </Alert>
       )}
+
+      {loading ? (
+        <Flex py={12} justify="center"><Spinner size="lg" /></Flex>
+      ) : tx ? (
+        <>
+          <HStack mb={6} spacing={4}>
+            {typeBadge}
+            {statusBadge}
+            <Tag colorScheme="teal" variant="subtle">
+              <TagLabel>{tx.gateway || "—"}</TagLabel>
+            </Tag>
+          </HStack>
+
+          {/* ✅ USERS */}
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
+            <UserMiniCard title="Transaction egasi" user={users.owner} />
+            <UserMiniCard title="Client" user={users.client} />
+            <UserMiniCard title="Freelancer" user={users.freelancer} />
+          </SimpleGrid>
+
+          <Card mb={6}>
+            <CardHeader>
+              <Heading size="md">Umumiy ma’lumotlar</Heading>
+            </CardHeader>
+            <CardBody>
+              <VStack align="stretch" spacing={3}>
+                <Flex justify="space-between">
+                  <Text fontWeight="medium">ID</Text>
+                  <Text fontWeight="semibold">#{tx.id}</Text>
+                </Flex>
+
+                <Flex justify="space-between">
+                  <Text fontWeight="medium">Summa</Text>
+                  <Text fontSize="xl" fontWeight="bold">{moneyUZS(tx.amount)}</Text>
+                </Flex>
+
+                <Flex justify="space-between">
+                  <Text fontWeight="medium">Valyuta</Text>
+                  <Text>{tx.currency || "UZS"}</Text>
+                </Flex>
+
+                <Flex justify="space-between">
+                  <Text fontWeight="medium">Gateway transaction ID</Text>
+                  <Text>{tx.gateway_transaction_id || "-"}</Text>
+                </Flex>
+
+                <Divider />
+
+                <Flex justify="space-between">
+                  <Text fontWeight="medium">Yaratilgan</Text>
+                  <Text>{tx.created_at ? new Date(tx.created_at).toLocaleString() : "-"}</Text>
+                </Flex>
+
+                <Flex justify="space-between">
+                  <Text fontWeight="medium">Yangilangan</Text>
+                  <Text>{tx.updated_at ? new Date(tx.updated_at).toLocaleString() : "-"}</Text>
+                </Flex>
+              </VStack>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <Heading size="md">Metadata</Heading>
+            </CardHeader>
+            <CardBody>
+              <Table size="sm">
+                <Thead>
+                  <Tr>
+                    <Th>Key</Th>
+                    <Th>Value</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {Object.entries(tx.metadata || {}).length === 0 ? (
+                    <Tr>
+                      <Td colSpan={2}>
+                        <Text color="gray.500">Metadata yo‘q</Text>
+                      </Td>
+                    </Tr>
+                  ) : (
+                    Object.entries(tx.metadata || {}).map(([k, v]) => (
+                      <Tr key={k}>
+                        <Td>{k}</Td>
+                        <Td whiteSpace="pre-wrap">
+                          {typeof v === "string" ? v : JSON.stringify(v)}
+                        </Td>
+                      </Tr>
+                    ))
+                  )}
+                </Tbody>
+              </Table>
+            </CardBody>
+          </Card>
+        </>
+      ) : null}
     </Box>
   );
 }

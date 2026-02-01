@@ -1,5 +1,4 @@
-// src/pages/admin/Payments.jsx
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Heading,
@@ -12,225 +11,189 @@ import {
   Badge,
   Flex,
   Text,
-  Avatar,
-  IconButton,
+  Spinner,
+  HStack,
   Select,
   Input,
   InputGroup,
   InputLeftElement,
-  HStack,
   Tag,
   TagLabel,
+  Button,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
-import { SearchIcon, ViewIcon, CheckCircleIcon, CloseIcon } from "@chakra-ui/icons";
+import { SearchIcon, ViewIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
+import { fetchMyPayments } from "../../lib/payments";
 
-export default function AdminPayments() {
-  // Mock data – keyin backend dan olamiz
-  const transactions = [
-    {
-      id: 1,
-      user: "Ogabek Dev",
-      username: "ogabek_dev",
-      type: "deposit",
-      amount: "500,000 so'm",
-      gateway: "Payme",
-      status: "completed",
-      date: "2026-01-05",
-    },
-    {
-      id: 2,
-      user: "Kamola Company",
-      username: "kamola_client",
-      type: "escrow_release",
-      amount: "5,000,000 so'm",
-      gateway: "Escrow",
-      status: "completed",
-      date: "2026-01-04",
-    },
-    {
-      id: 3,
-      user: "Ali Pro",
-      username: "ali_pro",
-      type: "withdrawal",
-      amount: "2,000,000 so'm",
-      gateway: "Click",
-      status: "pending",
-      date: "2026-01-03",
-    },
-    {
-      id: 4,
-      user: "Sardor Designer",
-      username: "sardor_design",
-      type: "fee",
-      amount: "500,000 so'm",
-      gateway: "Platform",
-      status: "completed",
-      date: "2026-01-02",
-    },
-    {
-      id: 5,
-      user: "Tech Startup",
-      username: "tech_startup",
-      type: "refund",
-      amount: "15,000,000 so'm",
-      gateway: "Escrow",
-      status: "in_progress",
-      date: "2026-01-01",
-    },
-  ];
+/* ===== UI META ===== */
+const typeMeta = {
+  deposit: { color: "green", label: "Depozit" },
+  withdrawal: { color: "orange", label: "Yechib olish" },
+  escrow_hold: { color: "blue", label: "Escrow hold" },
+  escrow_release: { color: "blue", label: "Escrow chiqarish" },
+  fee: { color: "purple", label: "Platforma haqi" },
+};
 
-  const getTypeBadge = (type) => {
-    const colorScheme = {
-      deposit: "green",
-      withdrawal: "orange",
-      escrow_release: "blue",
-      fee: "purple",
-      refund: "red",
-    };
-    const label = {
-      deposit: "Depozit",
-      withdrawal: "Yechib olish",
-      escrow_release: "Escrow chiqarish",
-      fee: "Platforma haqi",
-      refund: "Qaytarish",
-    };
-    return <Badge colorScheme={colorScheme[type] || "gray"}>{label[type] || type}</Badge>;
+const statusMeta = {
+  completed: { color: "green", label: "Muvaffaqiyatli" },
+  pending: { color: "yellow", label: "Kutilmoqda" },
+  failed: { color: "red", label: "Muvaffaqiyatsiz" },
+};
+
+const moneyUZS = (n) =>
+  Number.isFinite(Number(n))
+    ? `${new Intl.NumberFormat("uz-UZ").format(n)} so'm`
+    : "-";
+
+export default function Payments() {
+  const [q, setQ] = useState("");
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
+  const [items, setItems] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const params = useMemo(() => {
+    const p = { page, limit };
+    if (type) p.type = type;
+    if (status) p.status = status;
+    return p;
+  }, [page, limit, type, status]);
+
+  const loadPayments = async () => {
+    console.group("🔵 LOAD PAYMENTS");
+    console.log("➡️ Params:", params);
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetchMyPayments(params);
+      console.log("✅ API RESPONSE:", res);
+
+      if (!res.success) {
+        throw new Error(res.message || "Backend error");
+      }
+
+      const txs = res.data.transactions || [];
+      const pg = res.data.pagination || {};
+
+      setItems(txs);
+      setPagination({
+        page: pg.page || 1,
+        limit: pg.limit || limit,
+        total: pg.total || 0,
+        totalPages: pg.totalPages || 1,
+      });
+    } catch (e) {
+      console.error("❌ PAYMENTS ERROR:", e);
+      setError(e.message || "To‘lovlarni yuklashda xatolik");
+    } finally {
+      setLoading(false);
+      console.groupEnd();
+    }
   };
 
-  const getStatusBadge = (status) => {
-    const colorScheme = {
-      completed: "green",
-      pending: "yellow",
-      in_progress: "blue",
-      failed: "red",
-    };
-    const label = {
-      completed: "Muvaffaqiyatli",
-      pending: "Kutilmoqda",
-      in_progress: "Jarayonda",
-      failed: "Muvaffaqiyatsiz",
-    };
-    return <Badge colorScheme={colorScheme[status] || "gray"}>{label[status] || status}</Badge>;
+  useEffect(() => {
+    loadPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  const filtered = useMemo(() => {
+    if (!q) return items;
+    const s = q.toLowerCase();
+    return items.filter((t) =>
+      [t.id, t.type, t.status, t.gateway, t.amount]
+        .join(" ")
+        .toLowerCase()
+        .includes(s)
+    );
+  }, [items, q]);
+
+  const TypeBadge = ({ v }) => {
+    const m = typeMeta[v] || { color: "gray", label: v };
+    return <Badge colorScheme={m.color}>{m.label}</Badge>;
+  };
+
+  const StatusBadge = ({ v }) => {
+    const m = statusMeta[v] || { color: "gray", label: v };
+    return <Badge colorScheme={m.color}>{m.label}</Badge>;
   };
 
   return (
     <Box>
-      <Heading size="xl" mb={8}>
-        To'lovlar (Payments)
-      </Heading>
+      <Heading size="xl" mb={8}>To‘lovlar</Heading>
 
-      {/* Qidiruv va filter */}
-      <HStack mb={6} spacing={4}>
-        <InputGroup maxW="500px">
+      <HStack mb={6} spacing={4} flexWrap="wrap">
+        <InputGroup maxW="420px">
           <InputLeftElement>
             <SearchIcon color="gray.300" />
           </InputLeftElement>
-          <Input placeholder="User, transaction ID yoki summa bo'yicha qidirish" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Qidirish" />
         </InputGroup>
 
-        <Select maxW="200px" placeholder="Turi">
+        <Select placeholder="Turi" value={type} onChange={(e) => setType(e.target.value)}>
           <option value="deposit">Depozit</option>
           <option value="withdrawal">Yechib olish</option>
-          <option value="escrow_release">Escrow chiqarish</option>
-          <option value="fee">Haq</option>
-          <option value="refund">Qaytarish</option>
         </Select>
 
-        <Select maxW="200px" placeholder="Status">
+        <Select placeholder="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="completed">Muvaffaqiyatli</option>
           <option value="pending">Kutilmoqda</option>
-          <option value="in_progress">Jarayonda</option>
-          <option value="failed">Muvaffaqiyatsiz</option>
+          <option value="failed">Xato</option>
         </Select>
 
-        <Select maxW="200px" placeholder="Gateway">
-          <option value="payme">Payme</option>
-          <option value="click">Click</option>
-          <option value="escrow">Escrow</option>
-          <option value="platform">Platform</option>
-        </Select>
+        <Button onClick={() => { setQ(""); setType(""); setStatus(""); setPage(1); }}>
+          Tozalash
+        </Button>
       </HStack>
 
-      {/* Table */}
-      <Box overflowX="auto">
-        <Table variant="simple" size="lg">
+      {error && (
+        <Alert status="error" mb={4}>
+          <AlertIcon />{error}
+        </Alert>
+      )}
+
+      {loading ? (
+        <Flex justify="center" py={10}><Spinner size="lg" /></Flex>
+      ) : (
+        <Table>
           <Thead>
-            <Tr bg="gray.50">
-              <Th>Transaction ID</Th>
-              <Th>Foydalanuvchi</Th>
-              <Th>Turi</Th>
-              <Th>Summa</Th>
-              <Th>Gateway</Th>
-              <Th>Status</Th>
-              <Th>Sana</Th>
-              <Th>Amallar</Th>
+            <Tr>
+              <Th>ID</Th><Th>Turi</Th><Th>Summa</Th><Th>Gateway</Th><Th>Status</Th><Th>Sana</Th><Th />
             </Tr>
           </Thead>
           <Tbody>
-            {transactions.map((tx) => (
-              <Tr key={tx.id} _hover={{ bg: "gray.50" }}>
-                <Td fontWeight="medium">
+            {filtered.map((tx) => (
+              <Tr key={tx.id}>
+                <Td>#{tx.id}</Td>
+                <Td><TypeBadge v={tx.type} /></Td>
+                <Td>{moneyUZS(tx.amount)}</Td>
+                <Td><Tag><TagLabel>{tx.gateway}</TagLabel></Tag></Td>
+                <Td><StatusBadge v={tx.status} /></Td>
+                <Td>{new Date(tx.created_at).toLocaleString()}</Td>
+                <Td>
                   <Link to={`/admin/payments/${tx.id}`}>
-                    <Text color="blue.600">
-                      #{tx.id}
-                    </Text>
+                    <Button size="sm" leftIcon={<ViewIcon />}>Ko‘rish</Button>
                   </Link>
-                </Td>
-                <Td>
-                  <Flex align="center" gap={3}>
-                    <Avatar name={tx.user} size="sm" />
-                    <Box>
-                      <Text fontWeight="medium">{tx.user}</Text>
-                      <Text fontSize="sm" color="gray.600">@{tx.username}</Text>
-                    </Box>
-                  </Flex>
-                </Td>
-                <Td>{getTypeBadge(tx.type)}</Td>
-                <Td fontWeight="semibold">{tx.amount}</Td>
-                <Td>
-                  <Tag colorScheme="teal" variant="subtle">
-                    <TagLabel>{tx.gateway}</TagLabel>
-                  </Tag>
-                </Td>
-                <Td>{getStatusBadge(tx.status)}</Td>
-                <Td>{tx.date}</Td>
-                <Td>
-                  <HStack spacing={2}>
-                    <Link to={`/admin/payments/${tx.id}`}>
-                      <IconButton
-                        icon={<ViewIcon />}
-                        size="sm"
-                        colorScheme="blue"
-                        variant="ghost"
-                        aria-label="Ko'rish"
-                      />
-                    </Link>
-                    {tx.status === "pending" && (
-                      <>
-                        <IconButton
-                          icon={<CheckCircleIcon />}
-                          size="sm"
-                          colorScheme="green"
-                          variant="ghost"
-                          aria-label="Tasdiqlash"
-                        />
-                        <IconButton
-                          icon={<CloseIcon />}
-                          size="sm"
-                          colorScheme="red"
-                          variant="ghost"
-                          aria-label="Rad etish"
-                        />
-                      </>
-                    )}
-                  </HStack>
                 </Td>
               </Tr>
             ))}
           </Tbody>
         </Table>
-      </Box>
+      )}
     </Box>
   );
 }
