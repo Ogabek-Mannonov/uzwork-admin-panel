@@ -52,13 +52,17 @@ const moneyUZS = (amount) => {
   return `${new Intl.NumberFormat("uz-UZ").format(n)} so'm`;
 };
 
-function UserMiniCard({ title, user }) {
+function UserMiniCard({ title, user, to }) {
   if (!user) return null;
 
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
 
-  return (
-    <Card>
+  const card = (
+    <Card
+      _hover={to ? { boxShadow: "md", transform: "translateY(-1px)" } : undefined}
+      transition="all .15s ease"
+      cursor={to ? "pointer" : "default"}
+    >
       <CardHeader>
         <Heading size="sm">{title}</Heading>
       </CardHeader>
@@ -68,12 +72,29 @@ function UserMiniCard({ title, user }) {
           <Box>
             <Text fontWeight="semibold">{fullName || "—"}</Text>
             <Text color="gray.600">@{user.username || "—"}</Text>
-            {user.email && <Text fontSize="sm" color="gray.600">{user.email}</Text>}
-            {user.phone && <Text fontSize="sm" color="gray.600">{user.phone}</Text>}
+            {user.email && (
+              <Text fontSize="sm" color="gray.600">
+                {user.email}
+              </Text>
+            )}
+            {user.phone && (
+              <Text fontSize="sm" color="gray.600">
+                {user.phone}
+              </Text>
+            )}
           </Box>
         </Flex>
       </CardBody>
     </Card>
+  );
+
+  // ✅ to berilgan bo‘lsa karta bosilganda UserDetailga o‘tadi
+  return to ? (
+    <Link to={to} style={{ textDecoration: "none" }}>
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }
 
@@ -134,7 +155,9 @@ export default function PaymentDetail() {
           <IconButton icon={<ArrowLeftIcon />} colorScheme="gray" variant="ghost" size="lg" aria-label="Back" />
         </Link>
         <Heading size="xl">To‘lov tafsilotlari</Heading>
-        <Badge fontSize="lg" colorScheme="orange">Transaction #{paymentId}</Badge>
+        <Badge fontSize="lg" colorScheme="orange">
+          Transaction #{paymentId}
+        </Badge>
       </Flex>
 
       {error && (
@@ -145,7 +168,9 @@ export default function PaymentDetail() {
       )}
 
       {loading ? (
-        <Flex py={12} justify="center"><Spinner size="lg" /></Flex>
+        <Flex py={12} justify="center">
+          <Spinner size="lg" />
+        </Flex>
       ) : tx ? (
         <>
           <HStack mb={6} spacing={4}>
@@ -158,9 +183,14 @@ export default function PaymentDetail() {
 
           {/* ✅ USERS */}
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>
-            <UserMiniCard title="Transaction egasi" user={users.owner} />
-            <UserMiniCard title="Client" user={users.client} />
-            <UserMiniCard title="Freelancer" user={users.freelancer} />
+            <UserMiniCard title="Transaction egasi" user={users.owner}  to={users.owner?.id ? `/admin/users/${users.owner.id}` : undefined}/>
+            <UserMiniCard title="Client" user={users.client} to={users.client?.id ? `/admin/users/${users.client.id}` : undefined}/>
+            {/* ✅ Freelancer kartasi bosilganda UserDetailga o‘tadi */}
+            <UserMiniCard
+              title="Freelancer"
+              user={users.freelancer}
+              to={users.freelancer?.id ? `/admin/users/${users.freelancer.id}` : undefined}
+            />
           </SimpleGrid>
 
           <Card mb={6}>
@@ -176,7 +206,9 @@ export default function PaymentDetail() {
 
                 <Flex justify="space-between">
                   <Text fontWeight="medium">Summa</Text>
-                  <Text fontSize="xl" fontWeight="bold">{moneyUZS(tx.amount)}</Text>
+                  <Text fontSize="xl" fontWeight="bold">
+                    {moneyUZS(tx.amount)}
+                  </Text>
                 </Flex>
 
                 <Flex justify="space-between">
@@ -227,9 +259,7 @@ export default function PaymentDetail() {
                     Object.entries(tx.metadata || {}).map(([k, v]) => (
                       <Tr key={k}>
                         <Td>{k}</Td>
-                        <Td whiteSpace="pre-wrap">
-                          {typeof v === "string" ? v : JSON.stringify(v)}
-                        </Td>
+                        <Td whiteSpace="pre-wrap">{typeof v === "string" ? v : JSON.stringify(v)}</Td>
                       </Tr>
                     ))
                   )}
