@@ -33,6 +33,37 @@ import { ArrowLeft, Mail, Phone, Shield } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import api from "../../lib/api";
 
+/* ================= HELPERS ================= */
+const moneyUZS = (amount) => {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "0 so'm";
+  return `${new Intl.NumberFormat("uz-UZ").format(n)} so'm`;
+};
+
+const normalizePayload = (res) => {
+  const payload = res?.data ?? res;
+  // backend: { success, data: { user: {...} } }
+  return payload?.data?.user || payload?.user || payload?.data?.data?.user || null;
+};
+
+// ✅ Variant 1: balans source of truth = user_balances dan kelgan fieldlar
+const normalizeUser = (u) => {
+  const safe = {
+    ...u,
+    status: u?.status ?? "active",
+    recent_jobs: Array.isArray(u?.recent_jobs) ? u.recent_jobs : [],
+    jobs_summary: u?.jobs_summary || null,
+
+    // Balances from user_balances JOIN
+    available_balance: Number(u?.available_balance ?? 0) || 0,
+    escrow_balance: Number(u?.escrow_balance ?? 0) || 0,
+    total_spent: Number(u?.total_spent ?? 0) || 0,
+    total_earned: Number(u?.total_earned ?? 0) || 0,
+  };
+
+  return safe;
+};
+
 export default function UserDetail() {
   const { userId } = useParams();
   const toast = useToast();
@@ -53,12 +84,6 @@ export default function UserDetail() {
     role: "client",
   });
 
-  const normalizePayload = (res) => {
-    const payload = res?.data ?? res;
-    // backend: { success, data: { user: {...} } }
-    return payload?.data?.user || payload?.user || payload?.data?.data?.user || null;
-  };
-
   const fetchUserDetail = async () => {
     try {
       setLoading(true);
@@ -73,14 +98,7 @@ export default function UserDetail() {
         return;
       }
 
-      // status bo'lmasa default active
-      const safeUser = {
-        ...u,
-        status: u.status ?? "active",
-        recent_jobs: Array.isArray(u.recent_jobs) ? u.recent_jobs : [],
-        jobs_summary: u.jobs_summary || null,
-      };
-
+      const safeUser = normalizeUser(u);
       setUser(safeUser);
 
       // edit form init
@@ -104,6 +122,7 @@ export default function UserDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  /* ================= UI BADGES ================= */
   const getRoleBadge = (role) => {
     const color = role === "admin" ? "purple" : role === "freelancer" ? "blue" : "green";
     const label = role === "admin" ? "Admin" : role === "freelancer" ? "Freelancer" : "Client";
@@ -111,11 +130,7 @@ export default function UserDetail() {
   };
 
   const getStatusBadge = (status) => {
-    return status === "active" ? (
-      <Badge colorScheme="green">Faol</Badge>
-    ) : (
-      <Badge colorScheme="red">Bloklangan</Badge>
-    );
+    return status === "active" ? <Badge colorScheme="green">Faol</Badge> : <Badge colorScheme="red">Bloklangan</Badge>;
   };
 
   const jobStatusBadge = (status) => {
@@ -134,7 +149,7 @@ export default function UserDetail() {
     return <Badge colorScheme={schemes[status] || "gray"}>{labels[status] || status || "—"}</Badge>;
   };
 
-  // jobs split
+  /* ================= JOBS SPLIT ================= */
   const activeJobs = useMemo(() => {
     const list = user?.recent_jobs || [];
     return list.filter((j) => j.status === "open" || j.status === "in_progress");
@@ -145,12 +160,10 @@ export default function UserDetail() {
     return list.filter((j) => j.status === "completed");
   }, [user]);
 
-  // inline edit handlers
+  /* ================= EDIT HANDLERS ================= */
   const onChange = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
-  const startEdit = () => {
-    setIsEditing(true);
-  };
+  const startEdit = () => setIsEditing(true);
 
   const cancelEdit = () => {
     if (!user) return;
@@ -170,8 +183,7 @@ export default function UserDetail() {
     try {
       setSaving(true);
 
-      // ⚠️ Sizning backend update endpointingizga mos:
-      // Masalan: PUT /admin/users/:id
+      // PUT /admin/users/:id
       const res = await api.put(`/admin/users/${user.id}`, {
         first_name: form.first_name,
         last_name: form.last_name,
@@ -180,19 +192,21 @@ export default function UserDetail() {
         role: form.role,
       });
 
-      const updated = normalizePayload(res) || {
+      const updatedRaw = normalizePayload(res) || { ...user, ...form };
+
+      // ✅ update response balance qaytarmasa ham eski balance saqlanadi
+      const merged = normalizeUser({
         ...user,
-        ...form,
-      };
+        ...updatedRaw,
+        available_balance: updatedRaw.available_balance ?? user.available_balance,
+        escrow_balance: updatedRaw.escrow_balance ?? user.escrow_balance,
+        total_spent: updatedRaw.total_spent ?? user.total_spent,
+        total_earned: updatedRaw.total_earned ?? user.total_earned,
+      });
 
-      setUser((prev) => ({
-        ...(prev || {}),
-        ...updated,
-        status: updated.status ?? prev?.status ?? "active",
-        recent_jobs: Array.isArray(updated.recent_jobs) ? updated.recent_jobs : prev?.recent_jobs || [],
-      }));
-
+      setUser(merged);
       setIsEditing(false);
+
       toast({
         title: "Saqlandi",
         description: "Foydalanuvchi ma'lumotlari yangilandi",
@@ -218,27 +232,25 @@ export default function UserDetail() {
     if (!user) return;
 
     const nextStatus = user.status === "active" ? "blocked" : "active";
-    const ok = window.confirm(
-      nextStatus === "blocked"
-        ? "Userni bloklamoqchimisiz?"
-        : "Userni faollashtirmoqchimisiz?"
-    );
+    const ok = window.confirm(nextStatus === "blocked" ? "Userni bloklamoqchimisiz?" : "Userni faollashtirmoqchimisiz?");
     if (!ok) return;
 
     try {
       setStatusLoading(true);
 
-      // ⚠️ Siz yozgan endpoint: PATCH /admin/users/:id/status {status}
+      // PATCH /admin/users/:id/status { status }
       const res = await api.patch(`/admin/users/${user.id}/status`, { status: nextStatus });
 
       const payload = res?.data ?? res;
-      const updated = payload?.data?.user || payload?.user || null;
+      const updatedRaw = payload?.data?.user || payload?.user || null;
 
-      setUser((prev) => ({
-        ...(prev || {}),
-        ...(updated || {}),
-        status: (updated?.status ?? nextStatus),
-      }));
+      setUser((prev) =>
+        normalizeUser({
+          ...(prev || {}),
+          ...(updatedRaw || {}),
+          status: updatedRaw?.status ?? nextStatus,
+        })
+      );
 
       toast({
         title: "OK",
@@ -261,6 +273,7 @@ export default function UserDetail() {
     }
   };
 
+  /* ================= STATES ================= */
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
@@ -296,27 +309,15 @@ export default function UserDetail() {
 
         <HStack spacing={3}>
           {!isEditing ? (
-            <Button
-              variant="outline"
-              colorScheme="blue"
-              onClick={startEdit}
-            >
+            <Button variant="outline" colorScheme="blue" onClick={startEdit}>
               Tahrirlash
             </Button>
           ) : (
             <>
-              <Button
-                variant="ghost"
-                onClick={cancelEdit}
-                isDisabled={saving}
-              >
+              <Button variant="ghost" onClick={cancelEdit} isDisabled={saving}>
                 Bekor qilish
               </Button>
-              <Button
-                colorScheme="blue"
-                onClick={saveEdit}
-                isLoading={saving}
-              >
+              <Button colorScheme="blue" onClick={saveEdit} isLoading={saving}>
                 Saqlash
               </Button>
             </>
@@ -397,6 +398,7 @@ export default function UserDetail() {
 
         <CardBody>
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8}>
+            {/* Contact */}
             <VStack align="stretch" spacing={4}>
               <Box>
                 <Text fontWeight="medium" color="gray.600">
@@ -407,11 +409,7 @@ export default function UserDetail() {
                   {!isEditing ? (
                     <Text>{user.email}</Text>
                   ) : (
-                    <Input
-                      value={form.email}
-                      onChange={(e) => onChange("email", e.target.value)}
-                      placeholder="Email"
-                    />
+                    <Input value={form.email} onChange={(e) => onChange("email", e.target.value)} placeholder="Email" />
                   )}
                 </Flex>
               </Box>
@@ -425,39 +423,52 @@ export default function UserDetail() {
                   {!isEditing ? (
                     <Text>{user.phone || "Kiritilmagan"}</Text>
                   ) : (
-                    <Input
-                      value={form.phone}
-                      onChange={(e) => onChange("phone", e.target.value)}
-                      placeholder="Telefon"
-                    />
+                    <Input value={form.phone} onChange={(e) => onChange("phone", e.target.value)} placeholder="Telefon" />
                   )}
                 </Flex>
               </Box>
             </VStack>
 
+            {/* ✅ Balance (SOURCE: user_balances) */}
             <VStack align="stretch" spacing={4}>
               <Box>
                 <Text fontWeight="medium" color="gray.600">
-                  Balans
+                  Available balans
                 </Text>
                 <Text fontSize="xl" fontWeight="bold" mt={1}>
-                  {user.balance_uzs ?? 0}
-                </Text>
-                <Text fontSize="sm" color="gray.600">
-                  {user.balance_usd ?? 0}
+                  {moneyUZS(user.available_balance)}
                 </Text>
               </Box>
 
               <Box>
                 <Text fontWeight="medium" color="gray.600">
-                  Rating
+                  Escrow balans
                 </Text>
                 <Text fontSize="xl" fontWeight="bold" mt={1}>
-                  {user.rating || "Noma'lum"} ⭐
+                  {moneyUZS(user.escrow_balance)}
+                </Text>
+              </Box>
+
+              <Box>
+                <Text fontWeight="medium" color="gray.600">
+                  Jami sarflangan
+                </Text>
+                <Text fontSize="lg" fontWeight="semibold" mt={1}>
+                  {moneyUZS(user.total_spent)}
+                </Text>
+              </Box>
+
+              <Box>
+                <Text fontWeight="medium" color="gray.600">
+                  Jami ishlab topilgan
+                </Text>
+                <Text fontSize="lg" fontWeight="semibold" mt={1}>
+                  {moneyUZS(user.total_earned)}
                 </Text>
               </Box>
             </VStack>
 
+            {/* Misc */}
             <VStack align="stretch" spacing={4}>
               <Box>
                 <Text fontWeight="medium" color="gray.600">
@@ -468,9 +479,11 @@ export default function UserDetail() {
 
               <Box>
                 <Text fontWeight="medium" color="gray.600">
-                  Oxirgi faollik
+                  Rating
                 </Text>
-                <Text mt={1}>Noma'lum (keyin qo'shiladi)</Text>
+                <Text fontSize="xl" fontWeight="bold" mt={1}>
+                  {user.rating || "Noma'lum"} ⭐
+                </Text>
               </Box>
 
               <Box>
