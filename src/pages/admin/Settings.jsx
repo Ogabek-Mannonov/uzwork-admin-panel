@@ -145,10 +145,10 @@ export default function AdminSettings() {
           </CardBody>
         </Card>
 
-        {/* To‘lov tizimlari */}
+        {/* To'lov tizimlari */}
         <Card>
           <CardHeader>
-            <Heading size="md">Ruxsat etilgan to‘lov tizimlari</Heading>
+            <Heading size="md">Ruxsat etilgan to'lov tizimlari</Heading>
           </CardHeader>
           <CardBody>
             <Wrap spacing={4}>
@@ -161,7 +161,7 @@ export default function AdminSettings() {
                 </WrapItem>
               ))}
             </Wrap>
-            <Select placeholder="Yangi gateway qo‘shish" mt={4}>
+            <Select placeholder="Yangi gateway qo'shish" mt={4}>
               <option value="Payme">Payme</option>
               <option value="Click">Click</option>
               <option value="Uzcard">Uzcard</option>
@@ -173,7 +173,7 @@ export default function AdminSettings() {
         {/* Support va maintenance */}
         <Card>
           <CardHeader>
-            <Heading size="md">Qo‘llab-quvvatlash va texnik xizmat</Heading>
+            <Heading size="md">Qo'llab-quvvatlash va texnik xizmat</Heading>
           </CardHeader>
           <CardBody>
             <VStack spacing={6} align="stretch">

@@ -38,6 +38,23 @@ import {
 } from "lucide-react";
 import api from "../../lib/api";
 
+const GLASS_CARD = {
+  bg: "rgba(10, 18, 38, 0.55)",
+  border: "1px solid",
+  borderColor: "rgba(255,255,255,0.10)",
+  borderRadius: "2xl",
+  boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+  backdropFilter: "blur(12px)",
+  overflow: "hidden",
+};
+
+const SHINE_OVERLAY = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  bgGradient: "linear(to-b, rgba(255,255,255,0.10), rgba(255,255,255,0.02))",
+};
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
@@ -107,9 +124,9 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <Flex justify="center" align="center" h="70vh">
-        <Spinner size="xl" color="blue.500" thickness="4px" />
-        <Text ml={4} fontSize="lg">
+      <Flex justify="center" align="center" h="70vh" color="whiteAlpha.900">
+        <Spinner size="xl" color="blue.300" thickness="4px" />
+        <Text ml={4} fontSize="lg" color="whiteAlpha.800">
           Dashboard yuklanmoqda...
         </Text>
       </Flex>
@@ -118,7 +135,14 @@ export default function AdminDashboard() {
 
   if (error) {
     return (
-      <Alert status="error" borderRadius="lg" my={8}>
+      <Alert
+        status="error"
+        borderRadius="xl"
+        my={4}
+        bg="rgba(255,0,80,0.10)"
+        border="1px solid rgba(255,0,80,0.18)"
+        color="whiteAlpha.900"
+      >
         <AlertIcon />
         <Text>{error}</Text>
       </Alert>
@@ -132,7 +156,6 @@ export default function AdminDashboard() {
     cancelled: 0,
   };
 
-  // New finance cards (backenddan keladigan yangi fieldlar)
   const gmvLabel = stats?.gmvLabel ?? stats?.totalRevenueLabel ?? "0 so'm";
   const gmvGrowth = stats?.gmvGrowthPct ?? stats?.revenueGrowthPct ?? 0;
 
@@ -144,154 +167,160 @@ export default function AdminDashboard() {
   const depositVolumeLabel = stats?.depositVolumeLabel ?? "0 so'm";
   const depositVolumeGrowth = stats?.depositVolumeGrowthPct ?? 0;
 
+  const kpis = [
+    {
+      label: "Jami foydalanuvchilar",
+      value: stats?.totalUsers ?? 0,
+      growth: stats?.usersGrowthPct,
+      accent: "rgba(30,144,255,0.18)",
+    },
+    {
+      label: "Faol loyihalar",
+      value: stats?.activeJobs ?? 0,
+      growth: stats?.jobsGrowthPct,
+      accent: "rgba(0, 220, 130, 0.16)",
+    },
+    {
+      label: "GMV (Escrow yechildi)",
+      value: gmvLabel,
+      growth: gmvGrowth,
+      accent: "rgba(170, 90, 255, 0.16)",
+    },
+    {
+      label: "Platforma daromadi",
+      value: platformRevenueLabel,
+      growth: platformRevenueGrowth,
+      accent: "rgba(255, 200, 0, 0.14)",
+    },
+    {
+      label: "Deposit hajmi",
+      value: depositVolumeLabel,
+      growth: depositVolumeGrowth,
+      accent: "rgba(0, 180, 255, 0.14)",
+    },
+  ];
+
   return (
     <Box>
-      <Flex justify="space-between" align="center" mb={8} wrap="wrap" gap={4}>
-        <Heading size="xl">Dashboard</Heading>
+      {/* Header */}
+      <Flex justify="space-between" align="center" mb={6} wrap="wrap" gap={4}>
+        <Box>
+          <Heading size="lg" color="whiteAlpha.900">
+            Dashboard
+          </Heading>
+          <Text mt={1} color="whiteAlpha.600" fontSize="sm">
+            Umumiy ko‘rsatkichlar va so‘nggi faollik
+          </Text>
+        </Box>
 
         <HStack>
-          <Text color="gray.600" fontSize="sm">
+          <Text color="whiteAlpha.700" fontSize="sm">
             Davr:
           </Text>
-          <Select value={range} onChange={(e) => setRange(e.target.value)} maxW="220px">
-            <option value="today">Bugun</option>
-            <option value="7d">Oxirgi 7 kun</option>
-            <option value="30d">Oxirgi 30 kun</option>
+          <Select
+            value={range}
+            onChange={(e) => setRange(e.target.value)}
+            maxW="220px"
+            bg="rgba(255,255,255,0.06)"
+            borderColor="rgba(255,255,255,0.14)"
+            color="whiteAlpha.900"
+            _hover={{ borderColor: "rgba(255,255,255,0.28)" }}
+            _focus={{
+              borderColor: "rgba(66,153,225,0.9)",
+              boxShadow: "0 0 0 3px rgba(66,153,225,0.25)",
+            }}
+          >
+            <option style={{ color: "#111" }} value="today">
+              Bugun
+            </option>
+            <option style={{ color: "#111" }} value="7d">
+              Oxirgi 7 kun
+            </option>
+            <option style={{ color: "#111" }} value="30d">
+              Oxirgi 30 kun
+            </option>
           </Select>
         </HStack>
       </Flex>
 
-      {/* KPI (NEW: 5 cards) */}
+      {/* KPI */}
       <Grid
-        templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)" }}
+        templateColumns={{ base: "1fr", md: "repeat(2, 1fr)", xl: "repeat(3, 1fr)" }}
         gap={6}
         mb={6}
       >
-        <GridItem>
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel color="gray.600">Jami foydalanuvchilar</StatLabel>
-                <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.totalUsers ?? 0}
-                </StatNumber>
-                <StatHelpText>
-                  <StatArrow type={growthArrowType(stats?.usersGrowthPct)} />
-                  {formatPct(stats?.usersGrowthPct)}
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </GridItem>
-
-        <GridItem>
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel color="gray.600">Faol loyihalar</StatLabel>
-                <StatNumber fontSize="3xl" fontWeight="bold">
-                  {stats?.activeJobs ?? 0}
-                </StatNumber>
-                <StatHelpText>
-                  <StatArrow type={growthArrowType(stats?.jobsGrowthPct)} />
-                  {formatPct(stats?.jobsGrowthPct)}
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </GridItem>
-
-        <GridItem>
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel color="gray.600">GMV (Escrow yechildi)</StatLabel>
-                <StatNumber fontSize="3xl" fontWeight="bold">
-                  {gmvLabel}
-                </StatNumber>
-                <StatHelpText>
-                  <StatArrow type={growthArrowType(gmvGrowth)} />
-                  {formatPct(gmvGrowth)}
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </GridItem>
-
-        <GridItem>
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel color="gray.600">Platforma daromadi</StatLabel>
-                <StatNumber fontSize="3xl" fontWeight="bold">
-                  {platformRevenueLabel}
-                </StatNumber>
-                <StatHelpText>
-                  <StatArrow type={growthArrowType(platformRevenueGrowth)} />
-                  {formatPct(platformRevenueGrowth)}
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </GridItem>
-
-        <GridItem>
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel color="gray.600">Deposit hajmi</StatLabel>
-                <StatNumber fontSize="3xl" fontWeight="bold">
-                  {depositVolumeLabel}
-                </StatNumber>
-                <StatHelpText>
-                  <StatArrow type={growthArrowType(depositVolumeGrowth)} />
-                  {formatPct(depositVolumeGrowth)}
-                </StatHelpText>
-              </Stat>
-            </CardBody>
-          </Card>
-        </GridItem>
+        {kpis.map((k) => (
+          <GridItem key={k.label}>
+            <Card {...GLASS_CARD} position="relative">
+              <Box {...SHINE_OVERLAY} />
+              <Box
+                position="absolute"
+                top="-40px"
+                right="-40px"
+                w="140px"
+                h="140px"
+                bg={k.accent}
+                filter="blur(35px)"
+                borderRadius="full"
+              />
+              <CardBody position="relative">
+                <Stat>
+                  <StatLabel color="whiteAlpha.700">{k.label}</StatLabel>
+                  <StatNumber fontSize="3xl" fontWeight="bold" color="whiteAlpha.900">
+                    {k.value}
+                  </StatNumber>
+                  <StatHelpText color="whiteAlpha.700">
+                    <StatArrow type={growthArrowType(k.growth)} />
+                    {formatPct(k.growth)}
+                  </StatHelpText>
+                </Stat>
+              </CardBody>
+            </Card>
+          </GridItem>
+        ))}
       </Grid>
 
-      {/* RANGE SUMMARY + BREAKDOWN */}
+      {/* SUMMARY + BREAKDOWN */}
       <SimpleGrid columns={{ base: 1, lg: 3 }} gap={6} mb={8}>
-        {/* Range summary */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">Davr bo‘yicha</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative">
+            <Heading size="md" color="whiteAlpha.900">
+              Davr bo‘yicha
+            </Heading>
           </CardHeader>
-          <CardBody>
+          <CardBody position="relative">
             <VStack align="stretch" spacing={3}>
               <Flex justify="space-between" align="center">
                 <HStack>
-                  <Icon as={Users} />
-                  <Text>Yangi userlar</Text>
+                  <Icon as={Users} color="blue.300" />
+                  <Text color="whiteAlpha.800">Yangi userlar</Text>
                 </HStack>
-                <Badge colorScheme="blue" fontSize="lg">
+                <Badge bg="rgba(30,144,255,0.16)" color="whiteAlpha.900" border="1px solid rgba(30,144,255,0.28)">
                   {stats?.newUsers ?? 0}
                 </Badge>
               </Flex>
 
               <Flex justify="space-between" align="center">
                 <HStack>
-                  <Icon as={Briefcase} />
-                  <Text>Yangi loyihalar</Text>
+                  <Icon as={Briefcase} color="green.300" />
+                  <Text color="whiteAlpha.800">Yangi loyihalar</Text>
                 </HStack>
-                <Badge colorScheme="green" fontSize="lg">
+                <Badge bg="rgba(0,220,130,0.14)" color="whiteAlpha.900" border="1px solid rgba(0,220,130,0.22)">
                   {stats?.newJobs ?? 0}
                 </Badge>
               </Flex>
 
               <Flex justify="space-between" align="center">
                 <HStack>
-                  <Icon as={DollarSign} />
-                  <Text>Withdraw pending</Text>
+                  <Icon as={DollarSign} color="orange.300" />
+                  <Text color="whiteAlpha.800">Withdraw pending</Text>
                 </HStack>
                 <VStack spacing={0} align="end">
-                  <Badge colorScheme="orange" fontSize="lg">
+                  <Badge bg="rgba(255,170,0,0.14)" color="whiteAlpha.900" border="1px solid rgba(255,170,0,0.22)">
                     {finance?.pendingWithdrawals ?? 0}
                   </Badge>
-                  <Text fontSize="xs" color="gray.600">
+                  <Text fontSize="xs" color="whiteAlpha.600">
                     {finance?.pendingWithdrawalsAmountLabel ?? "0 so'm"}
                   </Text>
                 </VStack>
@@ -300,88 +329,115 @@ export default function AdminDashboard() {
           </CardBody>
         </Card>
 
-        {/* Job breakdown */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">Loyihalar statusi</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative">
+            <Heading size="md" color="whiteAlpha.900">
+              Loyihalar statusi
+            </Heading>
           </CardHeader>
-          <CardBody>
-            <VStack align="stretch" spacing={3}>
+          <CardBody position="relative">
+            <VStack align="stretch" spacing={3} color="whiteAlpha.800">
               <Flex justify="space-between">
                 <Text>Ochiq</Text>
-                <Badge colorScheme="green">{jobBreak.open}</Badge>
+                <Badge bg="rgba(0,220,130,0.14)" color="whiteAlpha.900" border="1px solid rgba(0,220,130,0.22)">
+                  {jobBreak.open}
+                </Badge>
               </Flex>
               <Flex justify="space-between">
                 <Text>Jarayonda</Text>
-                <Badge colorScheme="blue">{jobBreak.in_progress}</Badge>
+                <Badge bg="rgba(30,144,255,0.16)" color="whiteAlpha.900" border="1px solid rgba(30,144,255,0.28)">
+                  {jobBreak.in_progress}
+                </Badge>
               </Flex>
               <Flex justify="space-between">
                 <Text>Tugallangan</Text>
-                <Badge colorScheme="purple">{jobBreak.completed}</Badge>
+                <Badge bg="rgba(170,90,255,0.16)" color="whiteAlpha.900" border="1px solid rgba(170,90,255,0.26)">
+                  {jobBreak.completed}
+                </Badge>
               </Flex>
               <Flex justify="space-between">
                 <Text>Bekor</Text>
-                <Badge colorScheme="red">{jobBreak.cancelled}</Badge>
+                <Badge bg="rgba(255,0,80,0.10)" color="whiteAlpha.900" border="1px solid rgba(255,0,80,0.18)">
+                  {jobBreak.cancelled}
+                </Badge>
               </Flex>
             </VStack>
           </CardBody>
         </Card>
 
-        {/* Moderation/Chat quick */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">Moderatsiya & Chat</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative">
+            <Heading size="md" color="whiteAlpha.900">
+              Moderatsiya & Chat
+            </Heading>
           </CardHeader>
-          <CardBody>
-            <VStack align="stretch" spacing={3}>
+          <CardBody position="relative">
+            <VStack align="stretch" spacing={3} color="whiteAlpha.800">
               <Flex justify="space-between" align="center">
                 <Text>Bloklangan userlar</Text>
-                <Badge colorScheme="red">{moderation?.blockedUsers ?? 0}</Badge>
+                <Badge bg="rgba(255,0,80,0.10)" color="whiteAlpha.900" border="1px solid rgba(255,0,80,0.18)">
+                  {moderation?.blockedUsers ?? 0}
+                </Badge>
               </Flex>
 
               <Flex justify="space-between" align="center">
                 <Text>Ochiq nizolar</Text>
-                <Badge colorScheme="red">{moderation?.openDisputes ?? 0}</Badge>
+                <Badge bg="rgba(255,0,80,0.10)" color="whiteAlpha.900" border="1px solid rgba(255,0,80,0.18)">
+                  {moderation?.openDisputes ?? 0}
+                </Badge>
               </Flex>
 
-              <Divider />
+              <Divider borderColor="rgba(255,255,255,0.08)" />
 
               <Flex justify="space-between" align="center">
                 <HStack>
-                  <Icon as={MessageSquare} />
+                  <Icon as={MessageSquare} color="blue.300" />
                   <Text>Chatlar jami</Text>
                 </HStack>
-                <Badge colorScheme="blue">{chatStats?.totalChats ?? 0}</Badge>
+                <Badge bg="rgba(30,144,255,0.16)" color="whiteAlpha.900" border="1px solid rgba(30,144,255,0.28)">
+                  {chatStats?.totalChats ?? 0}
+                </Badge>
               </Flex>
 
               <Flex justify="space-between" align="center">
                 <Text>Blocked chatlar</Text>
-                <Badge colorScheme="red">{chatStats?.blockedChats ?? 0}</Badge>
+                <Badge bg="rgba(255,0,80,0.10)" color="whiteAlpha.900" border="1px solid rgba(255,0,80,0.18)">
+                  {chatStats?.blockedChats ?? 0}
+                </Badge>
               </Flex>
 
               <Flex justify="space-between" align="center">
                 <Text>24 soatda xabarlar</Text>
-                <Badge colorScheme="purple">{chatStats?.messagesLast24h ?? 0}</Badge>
+                <Badge bg="rgba(170,90,255,0.16)" color="whiteAlpha.900" border="1px solid rgba(170,90,255,0.26)">
+                  {chatStats?.messagesLast24h ?? 0}
+                </Badge>
               </Flex>
 
               <Flex justify="space-between" align="center">
                 <Text>Shubhali chatlar</Text>
-                <Badge colorScheme="orange">{chatStats?.suspiciousChats ?? 0}</Badge>
+                <Badge bg="rgba(255,170,0,0.14)" color="whiteAlpha.900" border="1px solid rgba(255,170,0,0.22)">
+                  {chatStats?.suspiciousChats ?? 0}
+                </Badge>
               </Flex>
             </VStack>
           </CardBody>
         </Card>
       </SimpleGrid>
 
-      {/* ACTIVITY + QUICK + TOP LISTS */}
+      {/* ACTIVITY + RIGHT */}
       <SimpleGrid columns={{ base: 1, lg: 2 }} gap={8}>
         {/* Recent activity */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">So'nggi faollik</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative">
+            <Heading size="md" color="whiteAlpha.900">
+              So'nggi faollik
+            </Heading>
           </CardHeader>
-          <CardBody>
-            <VStack align="stretch" spacing={4}>
+          <CardBody position="relative">
+            <VStack align="stretch" spacing={3}>
               {recentActivity.length > 0 ? (
                 recentActivity.map((a, idx) => (
                   <Flex
@@ -389,23 +445,28 @@ export default function AdminDashboard() {
                     align="center"
                     gap={4}
                     p={3}
-                    bg="gray.50"
-                    borderRadius="md"
+                    bg="rgba(255,255,255,0.05)"
+                    border="1px solid rgba(255,255,255,0.08)"
+                    borderRadius="xl"
+                    _hover={{ bg: "rgba(255,255,255,0.07)" }}
+                    transition="all 0.15s"
                   >
                     <Avatar name={a.name} size="md" />
                     <Box flex="1">
-                      <Text fontWeight="medium">{a.name}</Text>
-                      <Text fontSize="sm" color="gray.600">
+                      <Text fontWeight="semibold" color="whiteAlpha.900">
+                        {a.name}
+                      </Text>
+                      <Text fontSize="sm" color="whiteAlpha.700">
                         {a.action}
                       </Text>
                     </Box>
-                    <Text fontSize="sm" color="gray.500" whiteSpace="nowrap">
+                    <Text fontSize="sm" color="whiteAlpha.600" whiteSpace="nowrap">
                       {a.time}
                     </Text>
                   </Flex>
                 ))
               ) : (
-                <Text color="gray.500" textAlign="center" py={6}>
+                <Text color="whiteAlpha.600" textAlign="center" py={6}>
                   Hozircha faollik yo‘q
                 </Text>
               )}
@@ -415,38 +476,41 @@ export default function AdminDashboard() {
 
         <Box>
           {/* Quick stats */}
-          <Card mb={8}>
-            <CardHeader>
-              <Heading size="md">Tezkor statistika</Heading>
+          <Card {...GLASS_CARD} position="relative" mb={8}>
+            <Box {...SHINE_OVERLAY} />
+            <CardHeader position="relative">
+              <Heading size="md" color="whiteAlpha.900">
+                Tezkor statistika
+              </Heading>
             </CardHeader>
-            <CardBody>
-              <VStack align="stretch" spacing={4}>
-                <Flex justify="space-between">
-                  <Flex align="center" gap={3}>
-                    <Icon as={Clock} color="orange.500" boxSize={6} />
+            <CardBody position="relative">
+              <VStack align="stretch" spacing={4} color="whiteAlpha.800">
+                <Flex justify="space-between" align="center">
+                  <HStack>
+                    <Icon as={Clock} color="orange.300" boxSize={6} />
                     <Text>Kutilayotgan milestone lar</Text>
-                  </Flex>
-                  <Badge colorScheme="orange" fontSize="lg">
+                  </HStack>
+                  <Badge bg="rgba(255,170,0,0.14)" color="whiteAlpha.900" border="1px solid rgba(255,170,0,0.22)">
                     {moderation?.pendingMilestones ?? 0}
                   </Badge>
                 </Flex>
 
-                <Flex justify="space-between">
-                  <Flex align="center" gap={3}>
-                    <Icon as={CheckCircle} color="green.500" boxSize={6} />
+                <Flex justify="space-between" align="center">
+                  <HStack>
+                    <Icon as={CheckCircle} color="green.300" boxSize={6} />
                     <Text>Tugallangan (bu oy)</Text>
-                  </Flex>
-                  <Badge colorScheme="green" fontSize="lg">
+                  </HStack>
+                  <Badge bg="rgba(0,220,130,0.14)" color="whiteAlpha.900" border="1px solid rgba(0,220,130,0.22)">
                     {moderation?.completedThisMonth ?? 0}
                   </Badge>
                 </Flex>
 
-                <Flex justify="space-between">
-                  <Flex align="center" gap={3}>
-                    <Icon as={AlertCircle} color="red.500" boxSize={6} />
+                <Flex justify="space-between" align="center">
+                  <HStack>
+                    <Icon as={AlertCircle} color="red.300" boxSize={6} />
                     <Text>Ochiq nizolar</Text>
-                  </Flex>
-                  <Badge colorScheme="red" fontSize="lg">
+                  </HStack>
+                  <Badge bg="rgba(255,0,80,0.10)" color="whiteAlpha.900" border="1px solid rgba(255,0,80,0.18)">
                     {moderation?.openDisputes ?? 0}
                   </Badge>
                 </Flex>
@@ -456,11 +520,14 @@ export default function AdminDashboard() {
 
           {/* Top lists */}
           <SimpleGrid columns={{ base: 1, md: 2 }} gap={6}>
-            <Card>
-              <CardHeader>
-                <Heading size="sm">Top clientlar</Heading>
+            <Card {...GLASS_CARD} position="relative">
+              <Box {...SHINE_OVERLAY} />
+              <CardHeader position="relative">
+                <Heading size="sm" color="whiteAlpha.900">
+                  Top clientlar
+                </Heading>
               </CardHeader>
-              <CardBody>
+              <CardBody position="relative">
                 {topClients.length ? (
                   <VStack align="stretch" spacing={3}>
                     {topClients.map((c) => (
@@ -468,29 +535,34 @@ export default function AdminDashboard() {
                         <HStack>
                           <Avatar name={safeName(c)} size="sm" />
                           <Box>
-                            <Text fontWeight="semibold" fontSize="sm">
+                            <Text fontWeight="semibold" fontSize="sm" color="whiteAlpha.900">
                               {safeName(c)}
                             </Text>
-                            <Text fontSize="xs" color="gray.500">
+                            <Text fontSize="xs" color="whiteAlpha.600">
                               @{c.username || "—"}
                             </Text>
                           </Box>
                         </HStack>
-                        <Badge colorScheme="blue">{c.jobs_count} job</Badge>
+                        <Badge bg="rgba(30,144,255,0.16)" color="whiteAlpha.900" border="1px solid rgba(30,144,255,0.28)">
+                          {c.jobs_count} job
+                        </Badge>
                       </Flex>
                     ))}
                   </VStack>
                 ) : (
-                  <Text color="gray.500">Ma'lumot yo‘q</Text>
+                  <Text color="whiteAlpha.600">Ma'lumot yo‘q</Text>
                 )}
               </CardBody>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <Heading size="sm">Top freelancerlar</Heading>
+            <Card {...GLASS_CARD} position="relative">
+              <Box {...SHINE_OVERLAY} />
+              <CardHeader position="relative">
+                <Heading size="sm" color="whiteAlpha.900">
+                  Top freelancerlar
+                </Heading>
               </CardHeader>
-              <CardBody>
+              <CardBody position="relative">
                 {topFreelancers.length ? (
                   <VStack align="stretch" spacing={3}>
                     {topFreelancers.map((f) => (
@@ -498,20 +570,22 @@ export default function AdminDashboard() {
                         <HStack>
                           <Avatar name={safeName(f)} size="sm" />
                           <Box>
-                            <Text fontWeight="semibold" fontSize="sm">
+                            <Text fontWeight="semibold" fontSize="sm" color="whiteAlpha.900">
                               {safeName(f)}
                             </Text>
-                            <Text fontSize="xs" color="gray.500">
+                            <Text fontSize="xs" color="whiteAlpha.600">
                               @{f.username || "—"}
                             </Text>
                           </Box>
                         </HStack>
-                        <Badge colorScheme="purple">{f.messages_count} msg</Badge>
+                        <Badge bg="rgba(170,90,255,0.16)" color="whiteAlpha.900" border="1px solid rgba(170,90,255,0.26)">
+                          {f.messages_count} msg
+                        </Badge>
                       </Flex>
                     ))}
                   </VStack>
                 ) : (
-                  <Text color="gray.500">Ma'lumot yo‘q</Text>
+                  <Text color="whiteAlpha.600">Ma'lumot yo‘q</Text>
                 )}
               </CardBody>
             </Card>

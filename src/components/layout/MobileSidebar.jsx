@@ -8,7 +8,7 @@ import {
   DrawerContent,
   DrawerCloseButton,
   useDisclosure,
-  Button,
+  IconButton,
   Icon,
 } from "@chakra-ui/react";
 import { Menu } from "lucide-react";
@@ -19,25 +19,35 @@ export default function MobileSidebar() {
 
   return (
     <>
-      <Button
+      {/* glass hamburger */}
+      <IconButton
+        aria-label="Open menu"
         position="fixed"
         top={4}
         left={4}
         zIndex="overlay"
         onClick={onOpen}
-        colorScheme="blue"
-        size="lg"
-      >
-        <Icon as={Menu} boxSize={6} />
-      </Button>
+        icon={<Icon as={Menu} boxSize={6} />}
+        bg="rgba(10, 18, 38, 0.55)"
+        color="whiteAlpha.900"
+        border="1px solid"
+        borderColor="rgba(255,255,255,0.14)"
+        backdropFilter="blur(12px)"
+        _hover={{ bg: "rgba(10, 18, 38, 0.7)" }}
+      />
 
       <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
-        <DrawerOverlay />
-        <DrawerContent maxW="280px">
-          <DrawerCloseButton />
-          <DrawerHeader />
+        <DrawerOverlay bg="rgba(0,0,0,0.55)" />
+        <DrawerContent
+          maxW="280px"
+          bg="rgba(10, 18, 38, 0.92)"
+          borderRight="1px solid"
+          borderColor="rgba(255,255,255,0.10)"
+        >
+          <DrawerCloseButton color="whiteAlpha.800" />
+          <DrawerHeader borderBottom="1px solid" borderColor="rgba(255,255,255,0.08)" />
           <DrawerBody p={0}>
-            <Sidebar />
+            <Sidebar onNavigate={onClose} />
           </DrawerBody>
         </DrawerContent>
       </Drawer>

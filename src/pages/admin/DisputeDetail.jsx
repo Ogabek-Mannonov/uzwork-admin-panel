@@ -38,15 +38,76 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
+  TableContainer,
+  Stack,
+  useBreakpointValue,
 } from "@chakra-ui/react";
 import { ArrowLeftIcon } from "@chakra-ui/icons";
 import { MessageSquare } from "lucide-react";
 import { useParams, Link } from "react-router-dom";
 import api from "../../lib/api";
 
+/* ================= THEME (Admin glass dark) ================= */
+const GLASS_CARD = {
+  bg: "rgba(10, 18, 38, 0.55)",
+  border: "1px solid",
+  borderColor: "rgba(255,255,255,0.10)",
+  borderRadius: "2xl",
+  boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+  backdropFilter: "blur(12px)",
+  overflow: "hidden",
+};
+
+const SHINE_OVERLAY = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  bgGradient: "linear(to-b, rgba(255,255,255,0.10), rgba(255,255,255,0.02))",
+};
+
+const glassBtn = {
+  bg: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  color: "whiteAlpha.900",
+  _hover: { bg: "rgba(255,255,255,0.10)" },
+};
+
+const soft = {
+  bg: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: "xl",
+};
+
+const badgeBlue = {
+  bg: "rgba(30,144,255,0.16)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(30,144,255,0.28)",
+};
+const badgeGreen = {
+  bg: "rgba(0,220,130,0.14)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(0,220,130,0.22)",
+};
+const badgeRed = {
+  bg: "rgba(255,0,80,0.10)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(255,0,80,0.18)",
+};
+const badgePurple = {
+  bg: "rgba(170,90,255,0.16)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(170,90,255,0.26)",
+};
+const badgeOrange = {
+  bg: "rgba(255,170,0,0.14)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(255,170,0,0.22)",
+};
+
 export default function DisputeDetail() {
   const { disputeId } = useParams();
   const toast = useToast();
+  const isMobile = useBreakpointValue({ base: true, md: false });
 
   const [dispute, setDispute] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -93,35 +154,40 @@ export default function DisputeDetail() {
   }, [disputeId]);
 
   const getStatusBadge = (status) => {
-    const colorScheme = {
-      open: "orange",
-      in_review: "blue",
-      resolved: "green",
-      cancelled: "gray",
+    const v = String(status || "").toLowerCase();
+    const map = {
+      open: { label: "Ochiq", badge: badgeOrange },
+      in_review: { label: "Ko'rib chiqilmoqda", badge: badgeBlue },
+      resolved: { label: "Hal qilingan", badge: badgeGreen },
+      cancelled: {
+        label: "Bekor qilingan",
+        badge: { bg: "rgba(255,255,255,0.08)", color: "whiteAlpha.900", border: "1px solid rgba(255,255,255,0.12)" },
+      },
     };
-    const label = {
-      open: "Ochiq",
-      in_review: "Ko'rib chiqilmoqda",
-      resolved: "Hal qilingan",
-      cancelled: "Bekor qilingan",
-    };
+    const m =
+      map[v] || {
+        label: v || "—",
+        badge: { bg: "rgba(255,255,255,0.08)", color: "whiteAlpha.900", border: "1px solid rgba(255,255,255,0.12)" },
+      };
+
     return (
-      <Badge colorScheme={colorScheme[status] || "gray"} px={3} py={1} borderRadius="full">
-        {label[status] || status || "—"}
+      <Badge {...m.badge} px={3} py={1} borderRadius="full">
+        {m.label}
       </Badge>
     );
   };
 
   const getMilestoneStatusBadge = (status) => {
+    const v = String(status || "").toLowerCase();
     const map = {
-      pending: { c: "orange", t: "Pending" },
-      submitted: { c: "blue", t: "Submitted" },
-      approved: { c: "green", t: "Approved" },
-      released: { c: "purple", t: "Released" },
+      pending: { t: "Pending", b: badgeOrange },
+      submitted: { t: "Submitted", b: badgeBlue },
+      approved: { t: "Approved", b: badgeGreen },
+      released: { t: "Released", b: badgePurple },
     };
-    const it = map[status] || { c: "gray", t: status || "—" };
+    const it = map[v] || { t: v || "—", b: { bg: "rgba(255,255,255,0.08)", color: "whiteAlpha.900", border: "1px solid rgba(255,255,255,0.12)" } };
     return (
-      <Badge colorScheme={it.c} borderRadius="full" px={3} py={1}>
+      <Badge {...it.b} borderRadius="full" px={3} py={1}>
         {it.t}
       </Badge>
     );
@@ -206,15 +272,24 @@ export default function DisputeDetail() {
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
-        <Spinner size="xl" />
-        <Text ml={4}>Dispute yuklanmoqda...</Text>
+        <Spinner size="xl" color="blue.300" thickness="4px" />
+        <Text ml={4} color="whiteAlpha.800">
+          Dispute yuklanmoqda...
+        </Text>
       </Flex>
     );
   }
 
   if (error || !dispute) {
     return (
-      <Alert status="error" borderRadius="lg" my={8}>
+      <Alert
+        status="error"
+        borderRadius="xl"
+        my={8}
+        bg="rgba(255,0,80,0.10)"
+        border="1px solid rgba(255,0,80,0.18)"
+        color="whiteAlpha.900"
+      >
         <AlertIcon />
         <Text>{error || "Dispute topilmadi."}</Text>
       </Alert>
@@ -224,71 +299,121 @@ export default function DisputeDetail() {
   const client = dispute.client || null;
   const freelancer = dispute.freelancer || null;
 
+  const roleBadge = (role) => {
+    const r = String(role || "").toLowerCase();
+    if (r === "client") return <Badge {...badgeRed}>Client</Badge>;
+    if (r === "freelancer") return <Badge {...badgePurple}>Freelancer</Badge>;
+    if (r === "admin") return <Badge {...badgeBlue}>Admin</Badge>;
+    return (
+      <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">
+        —
+      </Badge>
+    );
+  };
+
   return (
     <Box>
-      {/* Header */}
-      <Flex align="center" mb={6} gap={4} wrap="wrap">
-        <Link to="/admin/disputes">
-          <IconButton icon={<ArrowLeftIcon />} colorScheme="gray" variant="ghost" size="lg" />
-        </Link>
+      {/* HEADER (sticky look) */}
+      <Card {...GLASS_CARD} position="relative" mb={6}>
+        <Box {...SHINE_OVERLAY} />
+        <CardBody position="relative" py={{ base: 4, md: 5 }}>
+          <Flex align="start" justify="space-between" gap={4} wrap="wrap">
+            <HStack spacing={3} align="center">
+              <Link to="/admin/disputes">
+                <IconButton
+                  icon={<ArrowLeftIcon />}
+                  aria-label="Back"
+                  {...glassBtn}
+                  size="md"
+                />
+              </Link>
 
-        <Heading size="xl">Nizo tafsilotlari</Heading>
+              <Box>
+                <Heading size="md" color="whiteAlpha.900" lineHeight="1.1">
+                  Nizo tafsilotlari
+                </Heading>
+                <HStack mt={2} spacing={2} wrap="wrap">
+                  <Badge {...badgeOrange} borderRadius="full" px={3} py={1}>
+                    Nizo #{String(dispute.id).slice(0, 8)}
+                  </Badge>
+                  {getStatusBadge(dispute.status)}
+                  {dispute.chat_id && (
+                    <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">
+                      Chat {String(dispute.chat_id).slice(0, 8)}…
+                    </Badge>
+                  )}
+                </HStack>
 
-        <HStack spacing={3}>
-          <Badge fontSize="lg" colorScheme="orange">
-            Nizo #{String(dispute.id).slice(0, 8)}
-          </Badge>
-          {getStatusBadge(dispute.status)}
-        </HStack>
+                <Text mt={2} fontSize="sm" color="whiteAlpha.600">
+                  Yaratilgan: {createdAtLabel}
+                </Text>
+              </Box>
+            </HStack>
 
-        <Flex ml="auto" gap={3} wrap="wrap">
-          {openChat && (
-            <Button
-              as={Link}
-              to={openChat}
-              leftIcon={<MessageSquare size={18} />}
-              variant="outline"
-              colorScheme="blue"
-            >
-              Chatga o‘tish
-            </Button>
-          )}
+            <HStack spacing={2} wrap="wrap">
+              {openChat && (
+                <Button
+                  as={Link}
+                  to={openChat}
+                  leftIcon={<MessageSquare size={18} />}
+                  bg="rgba(30,144,255,0.12)"
+                  color="whiteAlpha.900"
+                  border="1px solid rgba(30,144,255,0.20)"
+                  _hover={{ bg: "rgba(30,144,255,0.18)" }}
+                >
+                  Chatga o‘tish
+                </Button>
+              )}
 
-          {dispute.status === "open" && (
-            <Button onClick={startReview} isLoading={acting} colorScheme="blue" variant="outline">
-              In review qilish
-            </Button>
-          )}
-        </Flex>
-      </Flex>
+              {dispute.status === "open" && (
+                <Button
+                  onClick={startReview}
+                  isLoading={acting}
+                  bg="rgba(30,144,255,0.12)"
+                  color="whiteAlpha.900"
+                  border="1px solid rgba(30,144,255,0.20)"
+                  _hover={{ bg: "rgba(30,144,255,0.18)" }}
+                >
+                  In review qilish
+                </Button>
+              )}
 
+              <Button onClick={fetchDetail} isDisabled={acting} {...glassBtn}>
+                Yangilash
+              </Button>
+            </HStack>
+          </Flex>
+        </CardBody>
+      </Card>
+
+      {/* TOP CARDS */}
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={8}>
         {/* Umumiy */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">Umumiy ma’lumotlar</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative" pb={0}>
+            <Heading size="sm" color="whiteAlpha.900">
+              Umumiy ma’lumotlar
+            </Heading>
           </CardHeader>
-          <CardBody>
-            <VStack align="stretch" spacing={4}>
+          <CardBody position="relative" pt={4}>
+            <VStack align="stretch" spacing={3}>
               <Flex justify="space-between" gap={6}>
-                <Text fontWeight="medium">Chat ID</Text>
-                <Text fontWeight="semibold">{dispute.chat_id ? String(dispute.chat_id).slice(0, 10) : "—"}</Text>
+                <Text color="whiteAlpha.700">Chat ID</Text>
+                <Text color="whiteAlpha.900" fontWeight="semibold">
+                  {dispute.chat_id ? String(dispute.chat_id).slice(0, 10) : "—"}
+                </Text>
               </Flex>
 
               <Flex justify="space-between" gap={6}>
-                <Text fontWeight="medium">Status</Text>
+                <Text color="whiteAlpha.700">Status</Text>
                 {getStatusBadge(dispute.status)}
-              </Flex>
-
-              <Flex justify="space-between" gap={6}>
-                <Text fontWeight="medium">Yaratilgan</Text>
-                <Text>{createdAtLabel}</Text>
               </Flex>
 
               {dispute.amount != null && (
                 <Flex justify="space-between" gap={6}>
-                  <Text fontWeight="medium">Summa</Text>
-                  <Text fontWeight="semibold">
+                  <Text color="whiteAlpha.700">Summa</Text>
+                  <Text color="whiteAlpha.900" fontWeight="bold">
                     {Number(dispute.amount).toLocaleString("uz-UZ")} {dispute.currency || ""}
                   </Text>
                 </Flex>
@@ -296,8 +421,8 @@ export default function DisputeDetail() {
 
               {dispute.resolution && (
                 <Flex justify="space-between" gap={6}>
-                  <Text fontWeight="medium">Qaror</Text>
-                  <Badge colorScheme={dispute.resolution === "approved" ? "green" : "red"}>
+                  <Text color="whiteAlpha.700">Qaror</Text>
+                  <Badge {...(dispute.resolution === "approved" ? badgeGreen : badgeRed)} borderRadius="full" px={3} py={1}>
                     {dispute.resolution}
                   </Badge>
                 </Flex>
@@ -307,18 +432,29 @@ export default function DisputeDetail() {
         </Card>
 
         {/* Sabab */}
-        <Card>
-          <CardHeader>
-            <Heading size="md">Sababi</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative" pb={0}>
+            <Heading size="sm" color="whiteAlpha.900">
+              Sababi
+            </Heading>
           </CardHeader>
-          <CardBody>
-            <Text whiteSpace="pre-wrap">{dispute.reason || "—"}</Text>
+          <CardBody position="relative" pt={4}>
+            <Box {...soft} p={4}>
+              <Text color="whiteAlpha.900" whiteSpace="pre-wrap">
+                {dispute.reason || "—"}
+              </Text>
+            </Box>
 
             {dispute.admin_notes && (
               <>
-                <Divider my={4} />
-                <Text fontWeight="semibold">Admin izohi:</Text>
-                <Text mt={1} whiteSpace="pre-wrap">{dispute.admin_notes}</Text>
+                <Divider my={4} borderColor="rgba(255,255,255,0.10)" />
+                <Text fontWeight="semibold" color="whiteAlpha.900">
+                  Admin izohi:
+                </Text>
+                <Text mt={2} color="whiteAlpha.800" whiteSpace="pre-wrap">
+                  {dispute.admin_notes}
+                </Text>
               </>
             )}
           </CardBody>
@@ -327,51 +463,74 @@ export default function DisputeDetail() {
 
       {/* Client/Freelancer */}
       <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={8}>
-        <Card>
-          <CardHeader>
-            <Heading size="md">Client</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative" pb={0}>
+            <Heading size="sm" color="whiteAlpha.900">
+              Client
+            </Heading>
           </CardHeader>
-          <CardBody>
+          <CardBody position="relative" pt={4}>
             {client ? (
               <Flex align="center" gap={4}>
                 <Avatar name={fullName(client)} src={client.avatar_url || undefined} size="lg" />
-                <Box>
-                  <Text fontWeight="bold" fontSize="lg">{fullName(client)}</Text>
-                  <Text fontSize="sm" color="gray.600">@{client.username || "—"}</Text>
+                <Box minW={0}>
+                  <Text color="whiteAlpha.900" fontWeight="bold" fontSize="lg" noOfLines={1}>
+                    {fullName(client)}
+                  </Text>
+                  <HStack mt={1} spacing={2} wrap="wrap">
+                    <Text fontSize="sm" color="whiteAlpha.600">
+                      @{client.username || "—"}
+                    </Text>
+                    {roleBadge("client")}
+                  </HStack>
                 </Box>
               </Flex>
             ) : (
-              <Text color="gray.500">Client topilmadi</Text>
+              <Text color="whiteAlpha.600">Client topilmadi</Text>
             )}
           </CardBody>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <Heading size="md">Freelancer</Heading>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardHeader position="relative" pb={0}>
+            <Heading size="sm" color="whiteAlpha.900">
+              Freelancer
+            </Heading>
           </CardHeader>
-          <CardBody>
+          <CardBody position="relative" pt={4}>
             {freelancer ? (
               <Flex align="center" gap={4}>
                 <Avatar name={fullName(freelancer)} src={freelancer.avatar_url || undefined} size="lg" />
-                <Box>
-                  <Text fontWeight="bold" fontSize="lg">{fullName(freelancer)}</Text>
-                  <Text fontSize="sm" color="gray.600">@{freelancer.username || "—"}</Text>
+                <Box minW={0}>
+                  <Text color="whiteAlpha.900" fontWeight="bold" fontSize="lg" noOfLines={1}>
+                    {fullName(freelancer)}
+                  </Text>
+                  <HStack mt={1} spacing={2} wrap="wrap">
+                    <Text fontSize="sm" color="whiteAlpha.600">
+                      @{freelancer.username || "—"}
+                    </Text>
+                    {roleBadge("freelancer")}
+                  </HStack>
                 </Box>
               </Flex>
             ) : (
-              <Text color="gray.500">Freelancer topilmadi</Text>
+              <Text color="whiteAlpha.600">Freelancer topilmadi</Text>
             )}
           </CardBody>
         </Card>
       </SimpleGrid>
 
       {/* Chat history */}
-      <Card mb={8}>
-        <CardHeader>
-          <Heading size="md">Chat tarixi (oxirgi 30)</Heading>
+      <Card {...GLASS_CARD} position="relative" mb={8}>
+        <Box {...SHINE_OVERLAY} />
+        <CardHeader position="relative" pb={0}>
+          <Heading size="sm" color="whiteAlpha.900">
+            Chat tarixi (oxirgi 30)
+          </Heading>
         </CardHeader>
-        <CardBody>
+        <CardBody position="relative" pt={4}>
           {Array.isArray(dispute.chatHistory) && dispute.chatHistory.length > 0 ? (
             <VStack align="stretch" spacing={3}>
               {dispute.chatHistory.map((m) => {
@@ -380,23 +539,33 @@ export default function DisputeDetail() {
                   m.sender_username ||
                   "Unknown";
 
+                const when = m.created_at
+                  ? new Date(m.created_at).toLocaleString("uz-UZ", { timeStyle: "short", dateStyle: "short" })
+                  : "—";
+
                 return (
-                  <Box key={m.id} p={4} bg="gray.50" borderRadius="lg">
-                    <Flex justify="space-between" align="center">
-                      <Text fontWeight="semibold">
-                        {name}{" "}
-                        <Text as="span" fontWeight="normal" color="gray.600">
-                          ({m.sender_role || "user"})
-                        </Text>
-                      </Text>
-                      <Text fontSize="sm" color="gray.600">
-                        {m.created_at
-                          ? new Date(m.created_at).toLocaleString("uz-UZ", { timeStyle: "short", dateStyle: "short" })
-                          : "—"}
+                  <Box key={m.id} {...soft} p={4}>
+                    <Flex justify="space-between" align="start" gap={4}>
+                      <Box minW={0}>
+                        <HStack spacing={2} wrap="wrap">
+                          <Text color="whiteAlpha.900" fontWeight="semibold" noOfLines={1}>
+                            {name}
+                          </Text>
+                          <Badge
+                            bg="rgba(255,255,255,0.08)"
+                            color="whiteAlpha.900"
+                            border="1px solid rgba(255,255,255,0.12)"
+                          >
+                            {m.sender_role || "user"}
+                          </Badge>
+                        </HStack>
+                      </Box>
+                      <Text fontSize="sm" color="whiteAlpha.600" whiteSpace="nowrap">
+                        {when}
                       </Text>
                     </Flex>
 
-                    <Text mt={2} whiteSpace="pre-wrap">
+                    <Text mt={3} color="whiteAlpha.900" whiteSpace="pre-wrap">
                       {m.type === "text"
                         ? m.content
                         : m.type === "voice"
@@ -410,106 +579,169 @@ export default function DisputeDetail() {
               })}
             </VStack>
           ) : (
-            <Text color="gray.500">Chat tarixi topilmadi</Text>
+            <Text color="whiteAlpha.600">Chat tarixi topilmadi</Text>
           )}
         </CardBody>
       </Card>
 
       {/* Evidence */}
-      <Card mb={8}>
-        <CardHeader>
-          <Heading size="md">Dalillar (Evidence)</Heading>
+      <Card {...GLASS_CARD} position="relative" mb={8}>
+        <Box {...SHINE_OVERLAY} />
+        <CardHeader position="relative" pb={0}>
+          <Heading size="sm" color="whiteAlpha.900">
+            Dalillar (Evidence)
+          </Heading>
         </CardHeader>
-        <CardBody>
+        <CardBody position="relative" pt={4}>
           {Array.isArray(dispute.evidence_files) && dispute.evidence_files.length > 0 ? (
-            <Wrap>
+            <Wrap spacing={3}>
               {dispute.evidence_files.map((file, idx) => (
                 <WrapItem key={`${file}-${idx}`}>
-                  <Tag size="lg" colorScheme="blue" variant="subtle">
-                    <TagLabel>{String(file)}</TagLabel>
+                  <Tag
+                    size="lg"
+                    bg="rgba(30,144,255,0.12)"
+                    color="whiteAlpha.900"
+                    border="1px solid rgba(30,144,255,0.20)"
+                    borderRadius="full"
+                    _hover={{ bg: "rgba(30,144,255,0.18)" }}
+                  >
+                    <TagLabel noOfLines={1} maxW="360px">
+                      {String(file)}
+                    </TagLabel>
                   </Tag>
                 </WrapItem>
               ))}
             </Wrap>
           ) : (
-            <Text color="gray.500">Dalillar yo‘q</Text>
+            <Text color="whiteAlpha.600">Dalillar yo‘q</Text>
           )}
         </CardBody>
       </Card>
 
       {/* Milestones */}
-      <Card mb={8}>
-        <CardHeader>
-          <Heading size="md">Milestone lar</Heading>
+      <Card {...GLASS_CARD} position="relative" mb={8}>
+        <Box {...SHINE_OVERLAY} />
+        <CardHeader position="relative" pb={0}>
+          <Heading size="sm" color="whiteAlpha.900">
+            Milestone lar
+          </Heading>
         </CardHeader>
-        <CardBody>
+        <CardBody position="relative" pt={4}>
           {Array.isArray(dispute.milestones) && dispute.milestones.length > 0 ? (
-            <Table variant="simple">
-              <Thead>
-                <Tr>
-                  <Th>Nom</Th>
-                  <Th isNumeric>Summa</Th>
-                  <Th>Status</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
+            isMobile ? (
+              <Stack spacing={3}>
                 {dispute.milestones.map((ms) => (
-                  <Tr key={ms.id}>
-                    <Td>{ms.title || "—"}</Td>
-                    <Td isNumeric>{ms.amount != null ? Number(ms.amount).toLocaleString("uz-UZ") : "—"}</Td>
-                    <Td>{getMilestoneStatusBadge(ms.status)}</Td>
-                  </Tr>
+                  <Box key={ms.id} {...soft} p={4}>
+                    <Flex justify="space-between" align="start" gap={4}>
+                      <Box minW={0}>
+                        <Text color="whiteAlpha.900" fontWeight="semibold" noOfLines={1}>
+                          {ms.title || "—"}
+                        </Text>
+                        <Text mt={1} color="whiteAlpha.700" fontSize="sm">
+                          {ms.amount != null ? Number(ms.amount).toLocaleString("uz-UZ") : "—"}
+                        </Text>
+                      </Box>
+                      {getMilestoneStatusBadge(ms.status)}
+                    </Flex>
+                  </Box>
                 ))}
-              </Tbody>
-            </Table>
+              </Stack>
+            ) : (
+              <TableContainer>
+                <Table variant="simple">
+                  <Thead>
+                    <Tr bg="rgba(255,255,255,0.04)">
+                      <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
+                        Nom
+                      </Th>
+                      <Th isNumeric color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
+                        Summa
+                      </Th>
+                      <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
+                        Status
+                      </Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
+                    {dispute.milestones.map((ms) => (
+                      <Tr key={ms.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
+                        <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900">
+                          {ms.title || "—"}
+                        </Td>
+                        <Td isNumeric borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900">
+                          {ms.amount != null ? Number(ms.amount).toLocaleString("uz-UZ") : "—"}
+                        </Td>
+                        <Td borderColor="rgba(255,255,255,0.06)">{getMilestoneStatusBadge(ms.status)}</Td>
+                      </Tr>
+                    ))}
+                  </Tbody>
+                </Table>
+              </TableContainer>
+            )
           ) : (
-            <Text color="gray.500">Milestone topilmadi</Text>
+            <Text color="whiteAlpha.600">Milestone topilmadi</Text>
           )}
         </CardBody>
       </Card>
 
       {/* Actions */}
       {dispute.status !== "resolved" && (
-        <HStack spacing={4} justify="center" mt={10} wrap="wrap">
-          <Button
-            colorScheme="green"
-            size="lg"
-            onClick={() => openResolveModal("approved")}
-            isLoading={acting}
-          >
-            Freelancerga pul (approved)
-          </Button>
+        <Card {...GLASS_CARD} position="relative">
+          <Box {...SHINE_OVERLAY} />
+          <CardBody position="relative">
+            <Stack direction={{ base: "column", md: "row" }} spacing={3} justify="center">
+              <Button
+                size="lg"
+                onClick={() => openResolveModal("approved")}
+                isLoading={acting}
+                bg="rgba(0,220,130,0.14)"
+                color="whiteAlpha.900"
+                border="1px solid rgba(0,220,130,0.22)"
+                _hover={{ bg: "rgba(0,220,130,0.20)" }}
+              >
+                Freelancerga pul (approved)
+              </Button>
 
-          <Button
-            colorScheme="red"
-            size="lg"
-            onClick={() => openResolveModal("rejected")}
-            isLoading={acting}
-          >
-            Clientga refund (rejected)
-          </Button>
+              <Button
+                size="lg"
+                onClick={() => openResolveModal("rejected")}
+                isLoading={acting}
+                bg="rgba(255,0,80,0.10)"
+                color="whiteAlpha.900"
+                border="1px solid rgba(255,0,80,0.18)"
+                _hover={{ bg: "rgba(255,0,80,0.16)" }}
+              >
+                Clientga refund (rejected)
+              </Button>
 
-          <Button variant="outline" colorScheme="gray" size="lg" onClick={fetchDetail} isDisabled={acting}>
-            Yangilash
-          </Button>
-        </HStack>
+              <Button size="lg" onClick={fetchDetail} isDisabled={acting} {...glassBtn}>
+                Yangilash
+              </Button>
+            </Stack>
+          </CardBody>
+        </Card>
       )}
 
-      {/* Resolve Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
+      {/* Resolve Modal (glass) */}
+      <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
+        <ModalOverlay bg="rgba(0,0,0,0.6)" backdropFilter="blur(6px)" />
+        <ModalContent
+          bg="rgba(10, 18, 38, 0.92)"
+          border="1px solid rgba(255,255,255,0.10)"
+          borderRadius="2xl"
+          color="whiteAlpha.900"
+        >
           <ModalHeader>Dispute’ni hal qilish</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <HStack mb={3}>
+            <HStack mb={3} spacing={3} wrap="wrap">
               <Text fontWeight="semibold">Qaror:</Text>
-              <Badge colorScheme={resolution === "approved" ? "green" : "red"}>
+              <Badge {...(resolution === "approved" ? badgeGreen : badgeRed)} borderRadius="full" px={3} py={1}>
                 {resolution}
               </Badge>
             </HStack>
 
-            <Text fontSize="sm" color="gray.600" mb={2}>
+            <Text fontSize="sm" color="whiteAlpha.600" mb={2}>
               Admin izohi (ixtiyoriy):
             </Text>
             <Textarea
@@ -517,14 +749,24 @@ export default function DisputeDetail() {
               onChange={(e) => setAdminNotes(e.target.value)}
               placeholder="Masalan: dalillar tekshirildi, ish bajarilgan/bajarilmagan..."
               rows={4}
+              bg="rgba(255,255,255,0.06)"
+              borderColor="rgba(255,255,255,0.12)"
+              _hover={{ borderColor: "rgba(255,255,255,0.20)" }}
+              _focus={{
+                borderColor: "rgba(66,153,225,0.9)",
+                boxShadow: "0 0 0 3px rgba(66,153,225,0.25)",
+              }}
             />
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>
+            <Button variant="ghost" mr={3} onClick={onClose} color="whiteAlpha.900">
               Bekor
             </Button>
             <Button
-              colorScheme={resolution === "approved" ? "green" : "red"}
+              bg={resolution === "approved" ? "rgba(0,220,130,0.18)" : "rgba(255,0,80,0.14)"}
+              border={resolution === "approved" ? "1px solid rgba(0,220,130,0.28)" : "1px solid rgba(255,0,80,0.22)"}
+              color="whiteAlpha.900"
+              _hover={{ opacity: 0.95 }}
               onClick={doResolve}
               isLoading={acting}
             >

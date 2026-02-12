@@ -27,13 +27,93 @@ import {
   Input,
   Select,
   useToast,
-  Divider,
-} from "@chakra-ui/react";
+  Divider} from "@chakra-ui/react";
 import { ArrowLeft, Mail, Phone, Shield } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import api from "../../lib/api";
 
-/* ================= HELPERS ================= */
+/* ================= THEME HELPERS ================= */
+const GLASS_CARD = {
+  bg: "rgba(10, 18, 38, 0.55)",
+  border: "1px solid",
+  borderColor: "rgba(255,255,255,0.10)",
+  borderRadius: "2xl",
+  boxShadow: "0 18px 50px rgba(0,0,0,0.35)",
+  backdropFilter: "blur(12px)",
+  overflow: "hidden",
+};
+
+const SHINE_OVERLAY = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  bgGradient: "linear(to-b, rgba(255,255,255,0.10), rgba(255,255,255,0.02))",
+};
+
+const inputStyle = {
+  bg: "rgba(255,255,255,0.06)",
+  borderColor: "rgba(255,255,255,0.14)",
+  color: "whiteAlpha.900",
+  _placeholder: { color: "whiteAlpha.500" },
+  _hover: { borderColor: "rgba(255,255,255,0.28)" },
+  _focus: {
+    borderColor: "rgba(66,153,225,0.9)",
+    boxShadow: "0 0 0 3px rgba(66,153,225,0.25)",
+  },
+};
+
+const btnPrimary = {
+  h: "40px",
+  borderRadius: "xl",
+  fontWeight: "bold",
+  bgGradient: "linear(to-r, #1E90FF, #2B6CB0)",
+  color: "white",
+  boxShadow: "0 16px 30px rgba(30,144,255,0.22)",
+  _hover: { transform: "translateY(-1px)", boxShadow: "0 20px 34px rgba(30,144,255,0.30)" },
+  _active: { transform: "translateY(0px)" },
+  transition: "all 0.18s",
+};
+
+const btnGhost = {
+  h: "40px",
+  borderRadius: "xl",
+  bg: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  color: "whiteAlpha.900",
+  _hover: { bg: "rgba(255,255,255,0.09)" },
+};
+
+const badgeBlue = {
+  bg: "rgba(30,144,255,0.16)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(30,144,255,0.28)",
+};
+const badgeGreen = {
+  bg: "rgba(0,220,130,0.14)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(0,220,130,0.22)",
+};
+const badgeRed = {
+  bg: "rgba(255,0,80,0.10)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(255,0,80,0.18)",
+};
+const badgePurple = {
+  bg: "rgba(170,90,255,0.16)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(170,90,255,0.26)",
+};
+const badgeOrange = {
+  bg: "rgba(255,170,0,0.14)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(255,170,0,0.22)",
+};
+const badgeYellow = {
+  bg: "rgba(255, 214, 10, 0.12)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(255, 214, 10, 0.20)",
+};
+
 const moneyUZS = (amount) => {
   const n = Number(amount);
   if (!Number.isFinite(n)) return "0 so'm";
@@ -42,26 +122,20 @@ const moneyUZS = (amount) => {
 
 const normalizePayload = (res) => {
   const payload = res?.data ?? res;
-  // backend: { success, data: { user: {...} } }
   return payload?.data?.user || payload?.user || payload?.data?.data?.user || null;
 };
 
-// ✅ Variant 1: balans source of truth = user_balances dan kelgan fieldlar
 const normalizeUser = (u) => {
-  const safe = {
+  return {
     ...u,
     status: u?.status ?? "active",
     recent_jobs: Array.isArray(u?.recent_jobs) ? u.recent_jobs : [],
     jobs_summary: u?.jobs_summary || null,
-
-    // Balances from user_balances JOIN
     available_balance: Number(u?.available_balance ?? 0) || 0,
     escrow_balance: Number(u?.escrow_balance ?? 0) || 0,
     total_spent: Number(u?.total_spent ?? 0) || 0,
     total_earned: Number(u?.total_earned ?? 0) || 0,
   };
-
-  return safe;
 };
 
 export default function UserDetail() {
@@ -74,7 +148,6 @@ export default function UserDetail() {
   const [statusLoading, setStatusLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // inline edit
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     first_name: "",
@@ -101,7 +174,6 @@ export default function UserDetail() {
       const safeUser = normalizeUser(u);
       setUser(safeUser);
 
-      // edit form init
       setForm({
         first_name: safeUser.first_name || "",
         last_name: safeUser.last_name || "",
@@ -122,31 +194,30 @@ export default function UserDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  /* ================= UI BADGES ================= */
+  /* ================= BADGES ================= */
   const getRoleBadge = (role) => {
-    const color = role === "admin" ? "purple" : role === "freelancer" ? "blue" : "green";
     const label = role === "admin" ? "Admin" : role === "freelancer" ? "Freelancer" : "Client";
-    return <Badge colorScheme={color}>{label}</Badge>;
+    if (role === "admin") return <Badge {...badgePurple}>{label}</Badge>;
+    if (role === "freelancer") return <Badge {...badgeBlue}>{label}</Badge>;
+    return <Badge {...badgeGreen}>{label}</Badge>;
   };
 
   const getStatusBadge = (status) => {
-    return status === "active" ? <Badge colorScheme="green">Faol</Badge> : <Badge colorScheme="red">Bloklangan</Badge>;
+    return status === "active" ? <Badge {...badgeGreen}>Faol</Badge> : <Badge {...badgeRed}>Bloklangan</Badge>;
   };
 
   const jobStatusBadge = (status) => {
-    const schemes = {
-      open: "green",
-      in_progress: "blue",
-      completed: "purple",
-      cancelled: "red",
-    };
     const labels = {
       open: "OCHIQ",
       in_progress: "JARAYONDA",
       completed: "TUGALLANGAN",
       cancelled: "BEKOR",
     };
-    return <Badge colorScheme={schemes[status] || "gray"}>{labels[status] || status || "—"}</Badge>;
+    if (status === "open") return <Badge {...badgeGreen}>{labels[status]}</Badge>;
+    if (status === "in_progress") return <Badge {...badgeBlue}>{labels[status]}</Badge>;
+    if (status === "completed") return <Badge {...badgePurple}>{labels[status]}</Badge>;
+    if (status === "cancelled") return <Badge {...badgeRed}>{labels[status]}</Badge>;
+    return <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">{labels[status] || status || "—"}</Badge>;
   };
 
   /* ================= JOBS SPLIT ================= */
@@ -160,7 +231,7 @@ export default function UserDetail() {
     return list.filter((j) => j.status === "completed");
   }, [user]);
 
-  /* ================= EDIT HANDLERS ================= */
+  /* ================= EDIT ================= */
   const onChange = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
   const startEdit = () => setIsEditing(true);
@@ -183,7 +254,6 @@ export default function UserDetail() {
     try {
       setSaving(true);
 
-      // PUT /admin/users/:id
       const res = await api.put(`/admin/users/${user.id}`, {
         first_name: form.first_name,
         last_name: form.last_name,
@@ -194,7 +264,6 @@ export default function UserDetail() {
 
       const updatedRaw = normalizePayload(res) || { ...user, ...form };
 
-      // ✅ update response balance qaytarmasa ham eski balance saqlanadi
       const merged = normalizeUser({
         ...user,
         ...updatedRaw,
@@ -238,7 +307,6 @@ export default function UserDetail() {
     try {
       setStatusLoading(true);
 
-      // PATCH /admin/users/:id/status { status }
       const res = await api.patch(`/admin/users/${user.id}/status`, { status: nextStatus });
 
       const payload = res?.data ?? res;
@@ -277,8 +345,8 @@ export default function UserDetail() {
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
-        <Spinner size="xl" color="blue.500" thickness="4px" />
-        <Text ml={4} fontSize="lg">
+        <Spinner size="xl" color="blue.300" thickness="4px" />
+        <Text ml={4} fontSize="lg" color="whiteAlpha.800">
           Foydalanuvchi tafsilotlari yuklanmoqda...
         </Text>
       </Flex>
@@ -287,7 +355,14 @@ export default function UserDetail() {
 
   if (error || !user) {
     return (
-      <Alert status="error" borderRadius="lg" my={8}>
+      <Alert
+        status="error"
+        borderRadius="xl"
+        my={4}
+        bg="rgba(255,0,80,0.10)"
+        border="1px solid rgba(255,0,80,0.18)"
+        color="whiteAlpha.900"
+      >
         <AlertIcon />
         <Text>{error || "Foydalanuvchi topilmadi."}</Text>
       </Alert>
@@ -299,33 +374,49 @@ export default function UserDetail() {
   return (
     <Box>
       {/* Top bar */}
-      <Flex align="center" justify="space-between" mb={6} gap={4}>
+      <Flex align="center" justify="space-between" mb={6} gap={4} wrap="wrap">
         <HStack spacing={3}>
           <Link to="/admin/users">
-            <IconButton icon={<ArrowLeft size={20} />} colorScheme="gray" variant="ghost" />
+            <IconButton aria-label="Back" icon={<ArrowLeft size={20} />} {...btnGhost} />
           </Link>
-          <Heading size="xl">Foydalanuvchi tafsilotlari</Heading>
+
+          <Box>
+            <Heading size="lg" color="whiteAlpha.900">
+              Foydalanuvchi tafsilotlari
+            </Heading>
+            <Text color="whiteAlpha.600" fontSize="sm">
+              Profil, balans, role va loyihalar
+            </Text>
+          </Box>
         </HStack>
 
-        <HStack spacing={3}>
+        <HStack spacing={3} wrap="wrap">
           {!isEditing ? (
-            <Button variant="outline" colorScheme="blue" onClick={startEdit}>
+            <Button
+              {...btnGhost}
+              border="1px solid rgba(30,144,255,0.22)"
+              bg="rgba(30,144,255,0.10)"
+              _hover={{ bg: "rgba(30,144,255,0.14)" }}
+              onClick={startEdit}
+            >
               Tahrirlash
             </Button>
           ) : (
             <>
-              <Button variant="ghost" onClick={cancelEdit} isDisabled={saving}>
+              <Button {...btnGhost} onClick={cancelEdit} isDisabled={saving}>
                 Bekor qilish
               </Button>
-              <Button colorScheme="blue" onClick={saveEdit} isLoading={saving}>
+              <Button {...btnPrimary} onClick={saveEdit} isLoading={saving}>
                 Saqlash
               </Button>
             </>
           )}
 
           <Button
-            colorScheme={user.status === "active" ? "red" : "green"}
-            variant="outline"
+            {...btnGhost}
+            border={user.status === "active" ? "1px solid rgba(255,0,80,0.20)" : "1px solid rgba(0,220,130,0.22)"}
+            bg={user.status === "active" ? "rgba(255,0,80,0.08)" : "rgba(0,220,130,0.10)"}
+            _hover={{ bg: user.status === "active" ? "rgba(255,0,80,0.12)" : "rgba(0,220,130,0.14)" }}
             onClick={toggleUserStatus}
             isLoading={statusLoading}
           >
@@ -335,14 +426,17 @@ export default function UserDetail() {
       </Flex>
 
       {/* Profile card */}
-      <Card mb={8}>
-        <CardHeader>
+      <Card {...GLASS_CARD} mb={8} position="relative">
+        <Box {...SHINE_OVERLAY} />
+        <CardHeader position="relative">
           <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
-            <Flex align="center" gap={4}>
+            <Flex align="center" gap={4} wrap="wrap">
               <Avatar name={fullName} size="xl" />
               <Box>
                 {!isEditing ? (
-                  <Heading size="lg">{fullName}</Heading>
+                  <Heading size="md" color="whiteAlpha.900">
+                    {fullName}
+                  </Heading>
                 ) : (
                   <HStack spacing={3} wrap="wrap">
                     <Input
@@ -350,18 +444,20 @@ export default function UserDetail() {
                       onChange={(e) => onChange("first_name", e.target.value)}
                       placeholder="First name"
                       maxW="200px"
+                      {...inputStyle}
                     />
                     <Input
                       value={form.last_name}
                       onChange={(e) => onChange("last_name", e.target.value)}
                       placeholder="Last name"
                       maxW="200px"
+                      {...inputStyle}
                     />
                   </HStack>
                 )}
 
-                <Flex align="center" gap={4} mt={2} wrap="wrap">
-                  <Text color="gray.600">@{user.username}</Text>
+                <Flex align="center" gap={3} mt={2} wrap="wrap">
+                  <Text color="whiteAlpha.600">@{user.username}</Text>
 
                   {!isEditing ? (
                     getRoleBadge(user.role)
@@ -371,17 +467,24 @@ export default function UserDetail() {
                       onChange={(e) => onChange("role", e.target.value)}
                       maxW="200px"
                       size="sm"
+                      {...inputStyle}
                     >
-                      <option value="freelancer">Freelancer</option>
-                      <option value="client">Client</option>
-                      <option value="admin">Admin</option>
+                      <option style={{ background: "#0A1226", color: "#fff" }} value="freelancer">
+                        Freelancer
+                      </option>
+                      <option style={{ background: "#0A1226", color: "#fff" }} value="client">
+                        Client
+                      </option>
+                      <option style={{ background: "#0A1226", color: "#fff" }} value="admin">
+                        Admin
+                      </option>
                     </Select>
                   )}
 
                   {getStatusBadge(user.status || "active")}
 
                   {user.is_verified && (
-                    <Badge colorScheme="green">
+                    <Badge {...badgeGreen}>
                       <HStack spacing={1}>
                         <Shield size={14} />
                         <Text>Tasdiqlangan</Text>
@@ -389,80 +492,90 @@ export default function UserDetail() {
                     </Badge>
                   )}
 
-                  {user.is_premium && <Badge colorScheme="yellow">Premium</Badge>}
+                  {user.is_premium && <Badge {...badgeYellow}>Premium</Badge>}
                 </Flex>
               </Box>
             </Flex>
           </Flex>
         </CardHeader>
 
-        <CardBody>
+        <CardBody position="relative">
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8}>
             {/* Contact */}
             <VStack align="stretch" spacing={4}>
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Email
                 </Text>
-                <Flex align="center" gap={2} mt={1}>
+                <Flex align="center" gap={2} mt={2} color="whiteAlpha.900">
                   <Mail size={16} />
                   {!isEditing ? (
-                    <Text>{user.email}</Text>
+                    <Text>{user.email || "—"}</Text>
                   ) : (
-                    <Input value={form.email} onChange={(e) => onChange("email", e.target.value)} placeholder="Email" />
+                    <Input
+                      value={form.email}
+                      onChange={(e) => onChange("email", e.target.value)}
+                      placeholder="Email"
+                      {...inputStyle}
+                    />
                   )}
                 </Flex>
               </Box>
 
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Telefon
                 </Text>
-                <Flex align="center" gap={2} mt={1}>
+                <Flex align="center" gap={2} mt={2} color="whiteAlpha.900">
                   <Phone size={16} />
                   {!isEditing ? (
                     <Text>{user.phone || "Kiritilmagan"}</Text>
                   ) : (
-                    <Input value={form.phone} onChange={(e) => onChange("phone", e.target.value)} placeholder="Telefon" />
+                    <Input
+                      value={form.phone}
+                      onChange={(e) => onChange("phone", e.target.value)}
+                      placeholder="Telefon"
+                      {...inputStyle}
+                    />
                   )}
                 </Flex>
               </Box>
             </VStack>
 
-            {/* ✅ Balance (SOURCE: user_balances) */}
+            {/* Balance */}
             <VStack align="stretch" spacing={4}>
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Available balans
                 </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>
+                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
                   {moneyUZS(user.available_balance)}
                 </Text>
               </Box>
 
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Escrow balans
                 </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>
+                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
                   {moneyUZS(user.escrow_balance)}
                 </Text>
               </Box>
 
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Jami sarflangan
                 </Text>
-                <Text fontSize="lg" fontWeight="semibold" mt={1}>
+                <Text fontSize="lg" fontWeight="semibold" mt={1} color="whiteAlpha.900">
                   {moneyUZS(user.total_spent)}
                 </Text>
               </Box>
 
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Jami ishlab topilgan
                 </Text>
-                <Text fontSize="lg" fontWeight="semibold" mt={1}>
+                <Text fontSize="lg" fontWeight="semibold" mt={1} color="whiteAlpha.900">
                   {moneyUZS(user.total_earned)}
                 </Text>
               </Box>
@@ -471,26 +584,28 @@ export default function UserDetail() {
             {/* Misc */}
             <VStack align="stretch" spacing={4}>
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Ro‘yxatdan o‘tgan
                 </Text>
-                <Text mt={1}>{user.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}</Text>
+                <Text mt={1} color="whiteAlpha.900">
+                  {user.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}
+                </Text>
               </Box>
 
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Rating
                 </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>
+                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
                   {user.rating || "Noma'lum"} ⭐
                 </Text>
               </Box>
 
               <Box>
-                <Text fontWeight="medium" color="gray.600">
+                <Text fontWeight="semibold" color="whiteAlpha.700">
                   Tugallangan loyihalar
                 </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1}>
+                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
                   {user?.jobs_summary?.completed ?? completedJobs.length ?? 0}
                 </Text>
               </Box>
@@ -499,13 +614,13 @@ export default function UserDetail() {
 
           {user.jobs_summary && (
             <>
-              <Divider my={6} />
+              <Divider my={6} borderColor="rgba(255,255,255,0.08)" />
               <HStack spacing={3} wrap="wrap">
-                <Badge colorScheme="blue">Jami: {user.jobs_summary.total}</Badge>
-                <Badge colorScheme="green">Active: {user.jobs_summary.active}</Badge>
-                <Badge colorScheme="blue">In progress: {user.jobs_summary.in_progress}</Badge>
-                <Badge colorScheme="purple">Completed: {user.jobs_summary.completed}</Badge>
-                <Badge colorScheme="red">Cancelled: {user.jobs_summary.cancelled}</Badge>
+                <Badge {...badgeBlue}>Jami: {user.jobs_summary.total}</Badge>
+                <Badge {...badgeGreen}>Active: {user.jobs_summary.active}</Badge>
+                <Badge {...badgeBlue}>In progress: {user.jobs_summary.in_progress}</Badge>
+                <Badge {...badgePurple}>Completed: {user.jobs_summary.completed}</Badge>
+                <Badge {...badgeRed}>Cancelled: {user.jobs_summary.cancelled}</Badge>
               </HStack>
             </>
           )}
@@ -513,68 +628,86 @@ export default function UserDetail() {
       </Card>
 
       {/* Jobs section */}
-      <Card>
-        <CardHeader>
-          <Heading size="md">Loyihalar</Heading>
+      <Card {...GLASS_CARD} position="relative">
+        <Box {...SHINE_OVERLAY} />
+        <CardHeader position="relative">
+          <Heading size="md" color="whiteAlpha.900">
+            Loyihalar
+          </Heading>
+          <Text mt={1} color="whiteAlpha.600" fontSize="sm">
+            Jarayondagi va tugallangan loyihalar ro‘yxati
+          </Text>
         </CardHeader>
 
-        <CardBody>
+        <CardBody position="relative">
           {/* Active */}
-          <Heading size="sm" mb={3}>
+          <Heading size="sm" mb={3} color="whiteAlpha.900">
             Jarayondagi loyihalar
           </Heading>
 
           {activeJobs.length > 0 ? (
-            <Table variant="simple" mb={8}>
-              <Thead>
-                <Tr>
-                  <Th>Loyiha nomi</Th>
-                  <Th>Byudjet</Th>
-                  <Th>Status</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {activeJobs.map((job) => (
-                  <Tr key={job.id}>
-                    <Td>{job.title}</Td>
-                    <Td fontWeight="semibold">{job.budget || "Belgilanmagan"}</Td>
-                    <Td>{jobStatusBadge(job.status)}</Td>
+            <Box overflowX="auto" mb={8}>
+              <Table variant="simple">
+                <Thead>
+                  <Tr bg="rgba(255,255,255,0.04)">
+                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Loyiha nomi</Th>
+                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Byudjet</Th>
+                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Status</Th>
                   </Tr>
-                ))}
-              </Tbody>
-            </Table>
+                </Thead>
+                <Tbody>
+                  {activeJobs.map((job) => (
+                    <Tr key={job.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
+                      <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900">
+                        {job.title}
+                      </Td>
+                      <Td borderColor="rgba(255,255,255,0.06)" fontWeight="semibold" color="whiteAlpha.900">
+                        {job.budget || "Belgilanmagan"}
+                      </Td>
+                      <Td borderColor="rgba(255,255,255,0.06)">{jobStatusBadge(job.status)}</Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </Box>
           ) : (
-            <Text color="gray.500" mb={8}>
+            <Text color="whiteAlpha.600" mb={8}>
               Jarayonda loyiha yo‘q
             </Text>
           )}
 
           {/* Completed */}
-          <Heading size="sm" mb={3}>
+          <Heading size="sm" mb={3} color="whiteAlpha.900">
             Tugallangan loyihalar
           </Heading>
 
           {completedJobs.length > 0 ? (
-            <Table variant="simple">
-              <Thead>
-                <Tr>
-                  <Th>Loyiha nomi</Th>
-                  <Th>Byudjet</Th>
-                  <Th>Status</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {completedJobs.map((job) => (
-                  <Tr key={job.id}>
-                    <Td>{job.title}</Td>
-                    <Td fontWeight="semibold">{job.budget || "Belgilanmagan"}</Td>
-                    <Td>{jobStatusBadge(job.status)}</Td>
+            <Box overflowX="auto">
+              <Table variant="simple">
+                <Thead>
+                  <Tr bg="rgba(255,255,255,0.04)">
+                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Loyiha nomi</Th>
+                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Byudjet</Th>
+                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Status</Th>
                   </Tr>
-                ))}
-              </Tbody>
-            </Table>
+                </Thead>
+                <Tbody>
+                  {completedJobs.map((job) => (
+                    <Tr key={job.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
+                      <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900">
+                        {job.title}
+                      </Td>
+                      <Td borderColor="rgba(255,255,255,0.06)" fontWeight="semibold" color="whiteAlpha.900">
+                        {job.budget || "Belgilanmagan"}
+                      </Td>
+                      <Td borderColor="rgba(255,255,255,0.06)">{jobStatusBadge(job.status)}</Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </Box>
           ) : (
-            <Text color="gray.500">Tugallangan loyiha yo‘q</Text>
+            <Text color="whiteAlpha.600">Tugallangan loyiha yo‘q</Text>
           )}
         </CardBody>
       </Card>

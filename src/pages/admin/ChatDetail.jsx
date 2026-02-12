@@ -34,6 +34,7 @@ import {
   ModalCloseButton,
   useDisclosure,
   Textarea,
+  Divider,
 } from "@chakra-ui/react";
 import {
   ArrowLeft,
@@ -46,10 +47,101 @@ import {
   Edit2,
   Trash2,
   Copy,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import api from "../../lib/api";
 import socket from "../../utils/socket";
+
+/* ================= THEME (Telegram style - compact & modern) ================= */
+const HEADER_CARD = {
+  bg: "rgba(10, 18, 38, 0.52)",
+  border: "1px solid",
+  borderColor: "rgba(255,255,255,0.08)",
+  borderRadius: "xl",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+  backdropFilter: "blur(10px)",
+  overflow: "hidden",
+};
+
+const MESSAGES_CARD = {
+  bg: "rgba(10, 18, 38, 0.45)",
+  border: "1px solid",
+  borderColor: "rgba(255,255,255,0.06)",
+  borderRadius: "lg",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+  backdropFilter: "blur(8px)",
+  overflow: "hidden",
+};
+
+const COMPOSER_CARD = {
+  bg: "rgba(10, 18, 38, 0.48)",
+  border: "1px solid",
+  borderColor: "rgba(255,255,255,0.08)",
+  borderRadius: "xl",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+  backdropFilter: "blur(10px)",
+  overflow: "hidden",
+};
+
+const SHINE_OVERLAY = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  bgGradient: "linear(to-b, rgba(255,255,255,0.06), rgba(255,255,255,0.01))",
+};
+
+const btnGhost = {
+  h: "36px",
+  borderRadius: "lg",
+  bg: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  color: "whiteAlpha.900",
+  _hover: { bg: "rgba(255,255,255,0.08)" },
+  fontSize: "sm",
+};
+
+const inputDark = {
+  h: "40px",
+  borderRadius: "lg",
+  bg: "rgba(255,255,255,0.05)",
+  borderColor: "rgba(255,255,255,0.10)",
+  color: "whiteAlpha.900",
+  fontSize: "sm",
+  _placeholder: { color: "whiteAlpha.500" },
+  _hover: { borderColor: "rgba(255,255,255,0.15)" },
+  _focus: {
+    borderColor: "rgba(66,153,225,0.8)",
+    boxShadow: "0 0 0 2px rgba(66,153,225,0.15)",
+  },
+};
+
+const textareaDark = {
+  borderRadius: "lg",
+  bg: "rgba(255,255,255,0.05)",
+  borderColor: "rgba(255,255,255,0.10)",
+  color: "whiteAlpha.900",
+  fontSize: "sm",
+  _placeholder: { color: "whiteAlpha.500" },
+  _hover: { borderColor: "rgba(255,255,255,0.15)" },
+  _focus: {
+    borderColor: "rgba(66,153,225,0.8)",
+    boxShadow: "0 0 0 2px rgba(66,153,225,0.15)",
+  },
+};
+
+const adminBadgeStyle = {
+  bg: "rgba(30,144,255,0.18)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(30,144,255,0.28)",
+  px: 2,
+  py: 0.4,
+  borderRadius: "999px",
+  fontSize: "9px",
+  fontWeight: "700",
+  letterSpacing: "0.2px",
+};
 
 export default function ChatDetail() {
   const { chatId } = useParams();
@@ -82,17 +174,18 @@ export default function ChatDetail() {
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const audioRefs = useRef({});
 
+  // ✅ mini progress/time for voice messages
+  const [audioProgress, setAudioProgress] = useState({}); // { [messageId]: currentTime }
+  const [audioDuration, setAudioDuration] = useState({}); // { [messageId]: duration }
+
   // Edit/Delete states
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } =
     useDisclosure();
-  const {
-    isOpen: isDeleteOpen,
-    onOpen: onDeleteOpen,
-    onClose: onDeleteClose,
-  } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } =
+    useDisclosure();
 
   const [contextMenu, setContextMenu] = useState({
     isOpen: false,
@@ -102,10 +195,7 @@ export default function ChatDetail() {
   });
 
   // ✅ Dispute modal states (YANGI)
-  const {
-    isOpen: isDisputeOpen,
-    onClose: onDisputeClose,
-  } = useDisclosure();
+  const { isOpen: isDisputeOpen, onClose: onDisputeClose } = useDisclosure();
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeCreating, setDisputeCreating] = useState(false);
 
@@ -139,6 +229,18 @@ export default function ChatDetail() {
   };
 
   const goUserLink = (u) => (u?.id ? `/admin/users/${u.id}` : "#");
+
+  // ✅ helper: full name + username
+  const buildName = (u, fallbackRole) => {
+    const fn = u?.first_name || "";
+    const ln = u?.last_name || "";
+    const full = `${fn} ${ln}`.trim();
+    return full || fallbackRole || "User";
+  };
+  const buildUsername = (u, fallback) => {
+    const un = (u?.username || fallback || "").toString().trim();
+    return un ? `@${un}` : "";
+  };
 
   useEffect(() => {
     socket.connect();
@@ -242,6 +344,20 @@ export default function ChatDetail() {
       socket.off("messageEdited");
       socket.off("messageDeleted");
       socket.disconnect();
+
+      // ✅ stop all audios on unmount
+      try {
+        Object.values(audioRefs.current || {}).forEach((a) => {
+          try {
+            a.pause();
+            a.currentTime = 0;
+          } catch (e) {
+            console.error("Error pausing audio:", e);
+          }
+        });
+      } catch (e) {
+        console.error("Error stopping audio refs:", e);
+      }
     };
   }, [chatId, toast]);
 
@@ -424,17 +540,30 @@ export default function ChatDetail() {
     }
   };
 
+  // ✅ improved audio playback with progress/time
   const toggleAudioPlayback = (messageId, audioUrl) => {
     let fullAudioUrl = audioUrl;
 
-    if (audioUrl && !audioUrl.startsWith("http")) {
+    if (audioUrl && !String(audioUrl).startsWith("http")) {
       const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3000";
       fullAudioUrl = `${baseURL}${audioUrl}`;
     }
 
-    const audio = audioRefs.current[messageId];
+    // stop currently playing if different
+    if (playingAudioId && playingAudioId !== messageId) {
+      const prevAudio = audioRefs.current[playingAudioId];
+      if (prevAudio) {
+        try {
+          prevAudio.pause();
+        } catch (e) {
+          console.error("Error pausing previous audio:", e);
+        }
+      }
+    }
 
-    if (!audio) {
+    const existing = audioRefs.current[messageId];
+
+    if (!existing) {
       const newAudio = new Audio(fullAudioUrl);
       audioRefs.current[messageId] = newAudio;
 
@@ -448,26 +577,47 @@ export default function ChatDetail() {
         });
       };
 
+      newAudio.onloadedmetadata = () => {
+        setAudioDuration((prev) => ({
+          ...prev,
+          [messageId]: Number.isFinite(newAudio.duration) ? newAudio.duration : 0,
+        }));
+      };
+
+      newAudio.ontimeupdate = () => {
+        setAudioProgress((prev) => ({
+          ...prev,
+          [messageId]: newAudio.currentTime || 0,
+        }));
+      };
+
       newAudio.onended = () => {
         setPlayingAudioId(null);
+        setAudioProgress((prev) => ({ ...prev, [messageId]: 0 }));
       };
 
       newAudio.play().catch((err) => console.error("Play error:", err));
       setPlayingAudioId(messageId);
+      return;
+    }
+
+    if (playingAudioId === messageId) {
+      try {
+        existing.pause();
+      } catch (e) {
+        console.error("Pause error:", e);
+      } 
+      setPlayingAudioId(null);
     } else {
-      if (playingAudioId === messageId) {
-        audio.pause();
-        setPlayingAudioId(null);
-      } else {
-        audio.play().catch((err) => console.error("Play error:", err));
-        setPlayingAudioId(messageId);
-      }
+      existing.play().catch((err) => console.error("Play error:", err));
+      setPlayingAudioId(messageId);
     }
   };
 
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const s = Math.max(0, Math.floor(seconds || 0));
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
@@ -640,37 +790,59 @@ export default function ChatDetail() {
     }
   };
 
+  // ✅ file open/download helpers
+  const buildFileUrl = (url) => {
+    if (!url) return "";
+    const s = String(url);
+    if (s.startsWith("http")) return s;
+    const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    return `${baseURL}${s}`;
+  };
+
   if (loading) {
     return (
       <Flex justify="center" align="center" h="70vh">
-        <Spinner size="xl" color="blue.500" />
-        <Text ml={4}>Chat yuklanmoqda...</Text>
+        <Spinner size="lg" color="blue.300" thickness="3px" />
+        <Text ml={4} color="gray.500" fontSize="sm">Chat yuklanmoqda...</Text>
       </Flex>
     );
   }
 
   return (
     <Box
-      h="calc(100vh - 100px)"
+      w="full"
+      h="calc(100vh - 90px)"
       display="flex"
       flexDirection="column"
+      px={{ base: 2, md: 3, lg: 4 }}
+      pb={{ base: 2, md: 3, lg: 4 }}
+      gap={{ base: 2, md: 3 }}
       onClick={closeContextMenu}
+      bg="rgba(5,10,20,0.3)"
     >
-      {/* Header */}
-      <Card mb={4}>
-        <CardHeader>
-          <Flex align="center" justify="space-between" gap={4} wrap="wrap">
-            <Flex align="center" gap={4}>
+      {/* ================= HEADER (sticky, compact) ================= */}
+      <Box {...HEADER_CARD} position="sticky" top="0" zIndex={5} w="full">
+        <Box {...SHINE_OVERLAY} />
+        <Box position="relative" p={{ base: 3, md: 4 }}>
+          <Flex align="start" justify="space-between" gap={3} wrap="wrap">
+            <HStack spacing={2} align="start" flex="1" minW="0">
               <Link to="/admin/chats">
                 <IconButton
-                  icon={<ArrowLeft size={20} />}
-                  colorScheme="gray"
-                  variant="ghost"
+                  aria-label="Back"
+                  icon={<ArrowLeft size={18} />}
+                  {...btnGhost}
+                  size="sm"
                 />
               </Link>
 
-              <Box>
-                <Heading size="lg" lineHeight="1.1">
+              <Box flex="1" minW="0">
+                <Heading
+                  size="sm"
+                  color="whiteAlpha.900"
+                  lineHeight="1.3"
+                  noOfLines={1}
+                  fontSize={{ base: "14px", md: "16px" }}
+                >
                   {chatInfo.jobTitle?.trim()
                     ? chatInfo.jobTitle
                     : chatInfo.jobId
@@ -678,99 +850,121 @@ export default function ChatDetail() {
                     : "Chat"}
                 </Heading>
 
-                <Text fontSize="sm" color="gray.500" mt={1}>
+                <Text fontSize="11px" color="whiteAlpha.600" mt={0.5} noOfLines={1}>
                   Chat #{chatId.slice(0, 8)}...
                 </Text>
 
-                <Flex align="center" gap={6} mt={3} wrap="wrap">
+                <HStack spacing={3} mt={2} wrap="wrap" fontSize="xs">
+                  {/* Client */}
                   {chatInfo.client && (
                     <Flex
                       as={chatInfo.client?.id ? Link : "div"}
                       to={chatInfo.client?.id ? goUserLink(chatInfo.client) : undefined}
                       align="center"
-                      gap={2}
-                      _hover={chatInfo.client?.id ? { opacity: 0.85 } : undefined}
+                      gap={1.5}
                       cursor={chatInfo.client?.id ? "pointer" : "default"}
+                      _hover={chatInfo.client?.id ? { opacity: 0.85 } : undefined}
                     >
                       <Avatar
-                        name={`${chatInfo.client.first_name || ""} ${chatInfo.client.last_name || ""}`}
+                        name={buildName(chatInfo.client, "C")}
                         src={chatInfo.client.avatar_url || undefined}
-                        size="sm"
-                        bg="red.500"
+                        size="xs"
+                        bg="rgba(255,0,80,0.35)"
                         color="white"
                       />
-                      <Box>
-                        <Text fontSize="sm" fontWeight="medium">
-                          {chatInfo.client.first_name || chatInfo.client.last_name
-                            ? `${chatInfo.client.first_name || ""} ${chatInfo.client.last_name || ""}`.trim()
-                            : "Client"}
+                      <Box minW="0">
+                        <Text fontWeight="600" color="whiteAlpha.900" noOfLines={1}>
+                          {buildName(chatInfo.client, "Client")}
                         </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          @{chatInfo.client.username || "client"}
+                        <Text color="whiteAlpha.600" fontSize="10px" noOfLines={1}>
+                          {buildUsername(chatInfo.client, "client")}
                         </Text>
                       </Box>
                     </Flex>
                   )}
 
+                  {/* Freelancer */}
                   {chatInfo.freelancer && (
                     <Flex
                       as={chatInfo.freelancer?.id ? Link : "div"}
-                      to={
-                        chatInfo.freelancer?.id ? goUserLink(chatInfo.freelancer) : undefined
-                      }
+                      to={chatInfo.freelancer?.id ? goUserLink(chatInfo.freelancer) : undefined}
                       align="center"
-                      gap={2}
-                      _hover={chatInfo.freelancer?.id ? { opacity: 0.85 } : undefined}
+                      gap={1.5}
                       cursor={chatInfo.freelancer?.id ? "pointer" : "default"}
+                      _hover={chatInfo.freelancer?.id ? { opacity: 0.85 } : undefined}
                     >
                       <Avatar
-                        name={`${chatInfo.freelancer.first_name || ""} ${chatInfo.freelancer.last_name || ""}`}
+                        name={buildName(chatInfo.freelancer, "F")}
                         src={chatInfo.freelancer.avatar_url || undefined}
-                        size="sm"
-                        bg="orange.500"
+                        size="xs"
+                        bg="rgba(255,170,0,0.35)"
                         color="white"
                       />
-                      <Box>
-                        <Text fontSize="sm" fontWeight="medium">
-                          {chatInfo.freelancer.first_name || chatInfo.freelancer.last_name
-                            ? `${chatInfo.freelancer.first_name || ""} ${chatInfo.freelancer.last_name || ""}`.trim()
-                            : "Freelancer"}
+                      <Box minW="0">
+                        <Text fontWeight="600" color="whiteAlpha.900" noOfLines={1}>
+                          {buildName(chatInfo.freelancer, "Freelancer")}
                         </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          @{chatInfo.freelancer.username || "freelancer"}
+                        <Text color="whiteAlpha.600" fontSize="10px" noOfLines={1}>
+                          {buildUsername(chatInfo.freelancer, "freelancer")}
                         </Text>
                       </Box>
                     </Flex>
                   )}
-                </Flex>
+                </HStack>
               </Box>
-            </Flex>
-
-            {/* ✅ Dispute button (modal) */}
-            {/* <Button
-              leftIcon={<AlertTriangle size={18} />}
-              colorScheme="red"
-              variant="outline"
-              onClick={onDisputeOpen}
-            >
-              Dispute ochish
-            </Button> */}
+            </HStack>
           </Flex>
-        </CardHeader>
-      </Card>
+        </Box>
+      </Box>
 
-      {/* Messages */}
-      <Box flex="1" overflowY="auto" p={4} bg="gray.50" borderRadius="lg">
-        <VStack align="stretch" spacing={4}>
+      {/* ================= MESSAGES AREA (flex grow) ================= */}
+      <Box
+        {...MESSAGES_CARD}
+        flex="1"
+        position="relative"
+        w="full"
+        minH="0"
+        display="flex"
+        flexDirection="column"
+      >
+        <Box {...SHINE_OVERLAY} />
+        <Box
+          position="relative"
+          flex="1"
+          overflowY="auto"
+          px={{ base: 2, md: 4 }}
+          py={{ base: 2, md: 3 }}
+          display="flex"
+          flexDirection="column"
+          gap={{ base: 2, md: 2.5 }}
+          css={{
+            "&::-webkit-scrollbar": {
+              width: "6px",
+            },
+            "&::-webkit-scrollbar-track": {
+              background: "rgba(255,255,255,0.02)",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              background: "rgba(255,255,255,0.10)",
+              borderRadius: "3px",
+            },
+            "&::-webkit-scrollbar-thumb:hover": {
+              background: "rgba(255,255,255,0.15)",
+            },
+          }}
+        >
           {visibleMessages.length === 0 ? (
-            <Text textAlign="center" color="gray.500" py={10}>
-              Hozircha xabarlar yo'q
-            </Text>
+            <Flex align="center" justify="center" h="full">
+              <Text textAlign="center" color="whiteAlpha.500" fontSize="sm">
+                Hozircha xabarlar yo'q
+              </Text>
+            </Flex>
           ) : (
             visibleMessages.map((msg) => {
               let sender = null;
               let senderName = "Unknown";
               let avatarBg = "gray.500";
+              let username = "";
 
               if (msg.sender_role === "admin") {
                 senderName = "Admin";
@@ -780,31 +974,20 @@ export default function ChatDetail() {
                 normalizeId(msg.sender_id) === normalizeId(chatInfo.client?.id)
               ) {
                 sender = chatInfo.client;
-                senderName =
-                  sender?.first_name || sender?.last_name
-                    ? `${sender.first_name || ""} ${sender.last_name || ""}`.trim()
-                    : msg.sender_first_name || msg.sender_last_name
-                    ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
-                    : "Client";
-                avatarBg = "red.500";
+                senderName = buildName(sender, "Client");
+                username = buildUsername(sender, msg.sender_username);
+                avatarBg = "rgba(255,0,80,0.35)";
               } else if (
                 msg.sender_role === "freelancer" ||
                 normalizeId(msg.sender_id) === normalizeId(chatInfo.freelancer?.id)
               ) {
                 sender = chatInfo.freelancer;
-                senderName =
-                  sender?.first_name || sender?.last_name
-                    ? `${sender.first_name || ""} ${sender.last_name || ""}`.trim()
-                    : msg.sender_first_name || msg.sender_last_name
-                    ? `${msg.sender_first_name || ""} ${msg.sender_last_name || ""}`.trim()
-                    : "Freelancer";
-                avatarBg = "orange.500";
+                senderName = buildName(sender, "Freelancer");
+                username = buildUsername(sender, msg.sender_username);
+                avatarBg = "rgba(255,170,0,0.35)";
               }
 
               const isAdminMessage = msg.sender_role === "admin";
-              const avatarUrl = sender?.avatar_url || msg.sender_avatar;
-              const username = sender?.username || msg.sender_username;
-
               const canEdit = msg.type === "text" && canEditDelete(msg);
               const canDelete = canEditDelete(msg);
 
@@ -819,201 +1002,378 @@ export default function ChatDetail() {
                 ? `/admin/users/${senderUserId}`
                 : "#";
 
+              // ✅ Telegram-style narrow bubbles
+              const bubbleMaxW = { base: "85%", md: "70%", lg: "55%" };
+
+              const bubbleBg = isAdminMessage
+                ? "linear-gradient(135deg, rgba(30,144,255,0.28), rgba(30,144,255,0.14))"
+                : "rgba(255,255,255,0.06)";
+
+              const bubbleBorder = isAdminMessage
+                ? "rgba(30,144,255,0.28)"
+                : "rgba(255,255,255,0.10)";
+
+              const bubbleShadow = "0 4px 12px rgba(0,0,0,0.20)";
+
+              const cur = audioProgress[msg.id] || 0;
+              const dur = audioDuration[msg.id] || 0;
+              const pct = dur > 0 ? (cur / dur) * 100 : 0;
+
+              const fileUrl = msg.file_url ? buildFileUrl(msg.file_url) : "";
+
               return (
                 <Flex
                   key={normalizeId(msg.id)}
-                  alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
-                  maxW="70%"
-                  direction="column"
-                  gap={2}
-                  position="relative"
-                  role="group"
+                  align="flex-start"
+                  justify={isAdminMessage ? "flex-end" : "flex-start"}
+                  gap={1.5}
                 >
-                  {/* Sender info (clickable) */}
-                  <Flex
-                    as={!isAdminMessage && senderUserId ? Link : "div"}
-                    to={!isAdminMessage && senderUserId ? senderProfileLink : undefined}
-                    align="center"
-                    gap={2}
-                    alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
-                    cursor={!isAdminMessage && senderUserId ? "pointer" : "default"}
-                    _hover={!isAdminMessage && senderUserId ? { opacity: 0.85 } : undefined}
-                  >
-                    {!isAdminMessage && (
-                      <Avatar
-                        name={senderName}
-                        src={avatarUrl || undefined}
-                        size="xs"
-                        bg={avatarBg}
-                        color="white"
-                      />
-                    )}
+                  {!isAdminMessage && (
+                    <Avatar
+                      name={senderName}
+                      size="xs"
+                      bg={avatarBg}
+                      color="white"
+                      flexShrink={0}
+                      mt={0.5}
+                    />
+                  )}
 
-                    <Text fontSize="xs" fontWeight="semibold" color="gray.600">
-                      {senderName}
+                  <Box
+                    maxW={bubbleMaxW}
+                    display="flex"
+                    flexDirection="column"
+                    gap={1}
+                    role="group"
+                  >
+                    {/* Sender info - compact */}
+                    <Flex
+                      as={!isAdminMessage && senderUserId ? Link : "div"}
+                      to={!isAdminMessage && senderUserId ? senderProfileLink : undefined}
+                      align="center"
+                      gap={1}
+                      alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
+                      cursor={!isAdminMessage && senderUserId ? "pointer" : "default"}
+                      _hover={!isAdminMessage && senderUserId ? { opacity: 0.88 } : undefined}
+                      px={isAdminMessage ? 0 : 2}
+                      fontSize="11px"
+                    >
+                      <Text fontWeight="700" color="whiteAlpha.800">
+                        {senderName}
+                      </Text>
                       {username && (
-                        <Text as="span" fontWeight="normal" color="gray.500" ml={1}>
-                          @{username}
+                        <Text color="whiteAlpha.600" fontSize="10px">
+                          {username}
                         </Text>
                       )}
-                    </Text>
-
-                    {isAdminMessage && (
-                      <Avatar name={senderName} size="xs" bg={avatarBg} color="white" />
-                    )}
-                  </Flex>
-
-                  {/* Bubble */}
-                  <Box position="relative" onContextMenu={(e) => openContextMenu(e, msg)}>
-                    <Box
-                      bg={isAdminMessage ? "blue.500" : "white"}
-                      color={isAdminMessage ? "white" : "black"}
-                      p={4}
-                      borderRadius="lg"
-                      boxShadow="md"
-                    >
-                      {msg.type === "text" && (
-                        <Box>
-                          <Text>{msg.content}</Text>
-                          {msg.is_edited && (
-                            <Text
-                              fontSize="xs"
-                              color={isAdminMessage ? "whiteAlpha.700" : "gray.500"}
-                              mt={1}
-                            >
-                              (tahrirlangan)
-                            </Text>
-                          )}
-                        </Box>
+                      {isAdminMessage && (
+                        <Badge {...adminBadgeStyle}>ADMIN</Badge>
                       )}
+                    </Flex>
 
-                      {msg.type === "voice" && msg.file_url && (
-                        <HStack spacing={3}>
-                          <IconButton
-                            icon={
-                              playingAudioId === msg.id ? (
-                                <Pause size={18} />
-                              ) : (
-                                <Play size={18} />
-                              )
-                            }
-                            size="sm"
-                            colorScheme={isAdminMessage ? "whiteAlpha" : "blue"}
-                            onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
-                            aria-label="Play/Pause"
-                          />
-                          <Text fontSize="sm">Ovozli xabar</Text>
-                        </HStack>
-                      )}
-
-                      {msg.type === "file" && msg.file_url && (
-                        <HStack mt={2}>
-                          <Paperclip size={16} />
-                          <Text
-                            fontSize="sm"
-                            color={isAdminMessage ? "blue.100" : "blue.600"}
-                          >
-                            Fayl: {msg.file_url.split("/").pop()}
-                          </Text>
-                        </HStack>
-                      )}
-                    </Box>
-
-                    {/* 3-dot menu */}
-                    {(canEdit || canDelete) && (
+                    {/* Message bubble */}
+                    <Box position="relative" onContextMenu={(e) => openContextMenu(e, msg)}>
                       <Box
-                        position="absolute"
-                        right={isAdminMessage ? "auto" : "-10px"}
-                        left={isAdminMessage ? "-10px" : "auto"}
-                        top="4px"
-                        opacity={0}
-                        _groupHover={{ opacity: 1 }}
-                        transition="opacity 0.2s"
+                        bgGradient={isAdminMessage ? bubbleBg : undefined}
+                        bg={!isAdminMessage ? bubbleBg : undefined}
+                        border="1px solid"
+                        borderColor={bubbleBorder}
+                        color="whiteAlpha.900"
+                        p={{ base: 2.5, md: 3 }}
+                        borderRadius={{ base: "16px", md: "18px" }}
+                        boxShadow={bubbleShadow}
+                        position="relative"
+                        fontSize={{ base: "13px", md: "14px" }}
                       >
-                        <Menu>
-                          <MenuButton
-                            as={IconButton}
-                            icon={<MoreVertical size={16} />}
-                            size="xs"
-                            variant="ghost"
-                            colorScheme={isAdminMessage ? "whiteAlpha" : "gray"}
-                            aria-label="Options"
-                          />
-                          <MenuList>
-                            {msg.type === "text" && (
-                              <MenuItem
-                                icon={<Copy size={16} />}
-                                onClick={() => handleCopyMessage(msg.content)}
+                        {/* 3-dot menu */}
+                        {(canEdit || canDelete) && (
+                          <Box
+                            position="absolute"
+                            top="6px"
+                            right="8px"
+                            opacity={0}
+                            _groupHover={{ opacity: 1 }}
+                            transition="opacity 0.15s ease"
+                            zIndex={5}
+                          >
+                            <Menu>
+                              <MenuButton
+                                as={IconButton}
+                                icon={<MoreVertical size={14} />}
+                                size="xs"
+                                variant="ghost"
+                                aria-label="Options"
+                                bg="rgba(0,0,0,0.18)"
+                                border="1px solid rgba(255,255,255,0.10)"
+                                color="whiteAlpha.900"
+                                h="28px"
+                                w="28px"
+                                minW="28px"
+                                _hover={{ bg: "rgba(0,0,0,0.28)" }}
+                              />
+                              <MenuList
+                                bg="rgba(10,18,38,0.95)"
+                                border="1px solid rgba(255,255,255,0.10)"
+                                color="whiteAlpha.900"
+                                fontSize="sm"
                               >
-                                Nusxalash
-                              </MenuItem>
+                                {msg.type === "text" && (
+                                  <MenuItem
+                                    icon={<Copy size={14} />}
+                                    bg="transparent"
+                                    _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                                    onClick={() => handleCopyMessage(msg.content)}
+                                  >
+                                    Nusxalash
+                                  </MenuItem>
+                                )}
+                                {canEdit && (
+                                  <MenuItem
+                                    icon={<Edit2 size={14} />}
+                                    bg="transparent"
+                                    _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                                    onClick={() => handleEditClick(msg)}
+                                  >
+                                    Tahrirlash
+                                  </MenuItem>
+                                )}
+                                {canDelete && (
+                                  <MenuItem
+                                    icon={<Trash2 size={14} />}
+                                    bg="transparent"
+                                    color="red.300"
+                                    _hover={{ bg: "rgba(255,0,80,0.12)" }}
+                                    onClick={() => handleDeleteClick(msg)}
+                                  >
+                                    O'chirish
+                                  </MenuItem>
+                                )}
+                              </MenuList>
+                            </Menu>
+                          </Box>
+                        )}
+
+                        {/* TEXT MESSAGE */}
+                        {msg.type === "text" && (
+                          <Box pr={8}>
+                            <Text whiteSpace="pre-wrap" lineHeight="1.5">
+                              {msg.content}
+                            </Text>
+                            {msg.is_edited && (
+                              <Text fontSize="10px" color="whiteAlpha.600" mt={1}>
+                                (tahrirlangan)
+                              </Text>
                             )}
-                            {canEdit && (
-                              <MenuItem
-                                icon={<Edit2 size={16} />}
-                                onClick={() => handleEditClick(msg)}
+                          </Box>
+                        )}
+
+                        {/* VOICE MESSAGE */}
+                        {msg.type === "voice" && msg.file_url && (
+                          <Box pr={8}>
+                            <HStack spacing={2} align="center">
+                              <IconButton
+                                icon={
+                                  playingAudioId === msg.id ? (
+                                    <Pause size={16} />
+                                  ) : (
+                                    <Play size={16} />
+                                  )
+                                }
+                                size="xs"
+                                aria-label="Play/Pause"
+                                bg="rgba(255,255,255,0.10)"
+                                border="1px solid rgba(255,255,255,0.12)"
+                                _hover={{ bg: "rgba(255,255,255,0.14)" }}
+                                onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
+                                h="32px"
+                                w="32px"
+                                minW="32px"
+                              />
+                              <Box flex="1" minW="0">
+                                <HStack justify="space-between" mb={1}>
+                                  <Text fontSize="12px" fontWeight="600">
+                                    Ovozli
+                                  </Text>
+                                  <Text fontSize="10px" color="whiteAlpha.700">
+                                    {formatTime(cur)} / {formatTime(dur)}
+                                  </Text>
+                                </HStack>
+                                <Progress
+                                  value={pct}
+                                  size="xs"
+                                  borderRadius="full"
+                                  bg="rgba(255,255,255,0.10)"
+                                  colorScheme="blue"
+                                  h="3px"
+                                />
+                              </Box>
+                            </HStack>
+                          </Box>
+                        )}
+
+                        {/* FILE MESSAGE */}
+                        {msg.type === "file" && msg.file_url && (
+                          <Box pr={8}>
+                            <HStack spacing={2} align="center">
+                              <Box
+                                w="32px"
+                                h="32px"
+                                borderRadius="10px"
+                                bg="rgba(255,255,255,0.10)"
+                                border="1px solid rgba(255,255,255,0.12)"
+                                display="flex"
+                                alignItems="center"
+                                justifyContent="center"
+                                flexShrink={0}
                               >
-                                Tahrirlash
-                              </MenuItem>
-                            )}
-                            {canDelete && (
-                              <MenuItem
-                                icon={<Trash2 size={16} />}
-                                color="red.500"
-                                onClick={() => handleDeleteClick(msg)}
-                              >
-                                O'chirish
-                              </MenuItem>
-                            )}
-                          </MenuList>
-                        </Menu>
+                                <Paperclip size={14} />
+                              </Box>
+
+                              <Box flex="1" minW="0">
+                                <Text fontSize="12px" fontWeight="600" noOfLines={1}>
+                                  {String(msg.file_url).split("/").pop()}
+                                </Text>
+                                <Text fontSize="10px" color="whiteAlpha.700">
+                                  Fayl
+                                </Text>
+                              </Box>
+
+                              <HStack spacing={1} flexShrink={0}>
+                                <Tooltip label="Open" fontSize="xs">
+                                  <IconButton
+                                    as="a"
+                                    href={fileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    icon={<ExternalLink size={14} />}
+                                    size="xs"
+                                    aria-label="Open"
+                                    bg="rgba(255,255,255,0.10)"
+                                    border="1px solid rgba(255,255,255,0.12)"
+                                    _hover={{ bg: "rgba(255,255,255,0.14)" }}
+                                    h="28px"
+                                    w="28px"
+                                    minW="28px"
+                                  />
+                                </Tooltip>
+
+                                <Tooltip label="Download" fontSize="xs">
+                                  <IconButton
+                                    as="a"
+                                    href={fileUrl}
+                                    download
+                                    icon={<Download size={14} />}
+                                    size="xs"
+                                    aria-label="Download"
+                                    bg="rgba(255,255,255,0.10)"
+                                    border="1px solid rgba(255,255,255,0.12)"
+                                    _hover={{ bg: "rgba(255,255,255,0.14)" }}
+                                    h="28px"
+                                    w="28px"
+                                    minW="28px"
+                                  />
+                                </Tooltip>
+                              </HStack>
+                            </HStack>
+                          </Box>
+                        )}
+
+                        {/* Divider & metadata */}
+                        <Divider mt={2} mb={1.5} borderColor="rgba(255,255,255,0.05)" />
+
+                        <HStack
+                          justify="space-between"
+                          fontSize="10px"
+                          color="whiteAlpha.600"
+                        >
+                          <Text>
+                            {new Date(msg.created_at).toLocaleString("uz-UZ", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })}
+                          </Text>
+
+                          {msg.is_read && isAdminMessage && (
+                            <Badge
+                              bg="rgba(0,220,130,0.12)"
+                              border="1px solid rgba(0,220,130,0.20)"
+                              color="whiteAlpha.900"
+                              borderRadius="999px"
+                              px={2}
+                              py={0.3}
+                              fontSize="9px"
+                              fontWeight="700"
+                            >
+                              O'qildi
+                            </Badge>
+                          )}
+                        </HStack>
                       </Box>
-                    )}
+                    </Box>
                   </Box>
 
-                  {/* Time */}
-                  <HStack mt={1} alignSelf={isAdminMessage ? "flex-end" : "flex-start"}>
-                    <Text fontSize="xs" color="gray.500">
-                      {new Date(msg.created_at).toLocaleTimeString("uz-UZ", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                    {msg.is_read && isAdminMessage && (
-                      <Badge ml={2} colorScheme="green" fontSize="xs">
-                        O'qildi
-                      </Badge>
-                    )}
-                  </HStack>
+                  {isAdminMessage && (
+                    <Avatar
+                      name="Admin"
+                      size="xs"
+                      bg="rgba(30,144,255,0.40)"
+                      color="white"
+                      flexShrink={0}
+                      mt={0.5}
+                    />
+                  )}
                 </Flex>
               );
             })
           )}
 
           <div ref={messagesEndRef} />
-        </VStack>
+        </Box>
       </Box>
 
-      {/* Composer */}
-      <Card mt={4}>
-        <CardBody>
+      {/* ================= COMPOSER (compact, sticky) ================= */}
+      <Box {...COMPOSER_CARD} w="full">
+        <Box {...SHINE_OVERLAY} />
+        <Box position="relative" p={{ base: 2.5, md: 3 }}>
           {isRecording && (
-            <VStack spacing={3} mb={4}>
-              <HStack justify="space-between" w="full">
+            <VStack spacing={2} mb={3}>
+              <HStack justify="space-between" w="full" fontSize="sm">
                 <HStack>
-                  <Box w={3} h={3} bg="red.500" borderRadius="full" />
-                  <Text fontWeight="medium">Yozilmoqda...</Text>
+                  <Box w={2.5} h={2.5} bg="red.400" borderRadius="full" animation="pulse 1s infinite" />
+                  <Text fontWeight="600" color="whiteAlpha.900">
+                    Yozilmoqda...
+                  </Text>
                 </HStack>
-                <Text fontWeight="bold" color="red.500">
+                <Text fontWeight="bold" color="red.300" fontSize="sm">
                   {formatTime(recordingTime)}
                 </Text>
               </HStack>
-              <Progress value={(recordingTime / 60) * 100} w="full" colorScheme="red" size="sm" />
-              <HStack spacing={2}>
-                <Button colorScheme="red" size="sm" onClick={cancelRecording}>
+              <Progress
+                value={(recordingTime / 60) * 100}
+                w="full"
+                colorScheme="red"
+                size="xs"
+                borderRadius="full"
+                h="2px"
+              />
+              <HStack spacing={2} w="full" flexDir={{ base: "column", sm: "row" }}>
+                <Button
+                  w="full"
+                  h="36px"
+                  colorScheme="red"
+                  variant="outline"
+                  onClick={cancelRecording}
+                  fontSize="sm"
+                >
                   Bekor qilish
                 </Button>
-                <Button colorScheme="green" size="sm" onClick={stopRecording}>
+                <Button
+                  w="full"
+                  h="36px"
+                  colorScheme="green"
+                  onClick={stopRecording}
+                  fontSize="sm"
+                >
                   To'xtatish
                 </Button>
               </HStack>
@@ -1021,85 +1381,153 @@ export default function ChatDetail() {
           )}
 
           {audioBlob && !isRecording && (
-            <HStack spacing={3} mb={4} p={3} bg="gray.50" borderRadius="md">
+            <HStack
+              spacing={2}
+              mb={3}
+              p={2.5}
+              bg="rgba(255,255,255,0.05)"
+              border="1px solid rgba(255,255,255,0.08)"
+              borderRadius="lg"
+              flexWrap="wrap"
+              fontSize="sm"
+            >
               <IconButton
-                icon={<Play size={18} />}
-                size="sm"
-                colorScheme="blue"
+                icon={<Play size={16} />}
+                size="xs"
+                aria-label="Preview"
+                bg="rgba(255,255,255,0.08)"
+                border="1px solid rgba(255,255,255,0.10)"
+                _hover={{ bg: "rgba(255,255,255,0.12)" }}
                 onClick={() => {
                   const audio = new Audio(URL.createObjectURL(audioBlob));
                   audio.play();
                 }}
-                aria-label="Preview"
+                h="32px"
+                w="32px"
+                minW="32px"
               />
-              <Text flex={1}>Ovozli xabar ({formatTime(recordingTime)})</Text>
-              <Button size="sm" colorScheme="red" variant="ghost" onClick={() => setAudioBlob(null)}>
+              <Text flex={1} color="whiteAlpha.800" minW="150px" fontSize="13px">
+                Ovozli ({formatTime(recordingTime)})
+              </Text>
+              <Button
+                size="xs"
+                variant="ghost"
+                color="red.200"
+                onClick={() => setAudioBlob(null)}
+                fontSize="xs"
+              >
                 O'chirish
               </Button>
-              <Button size="sm" colorScheme="blue" onClick={sendVoiceMessage} isLoading={sending}>
+              <Button
+                size="xs"
+                colorScheme="blue"
+                onClick={sendVoiceMessage}
+                isLoading={sending}
+                fontSize="xs"
+              >
                 Yuborish
               </Button>
             </HStack>
           )}
 
           {!isRecording && !audioBlob && (
-            <InputGroup>
+            <InputGroup size="sm">
               <Input
                 placeholder="Xabar yozing..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && !sending && handleSendMessage()}
                 disabled={sending}
+                {...inputDark}
               />
-              <InputRightElement width="6rem">
-                <HStack spacing={1}>
-                  <Tooltip label="Fayl yuklash">
-                    <IconButton icon={<Paperclip size={18} />} variant="ghost" size="sm" aria-label="Fayl" />
-                  </Tooltip>
-                  <Tooltip label="Ovozli xabar">
+              <InputRightElement width="auto" pr={1}>
+                <HStack spacing={0.5}>
+                  <Tooltip label="Fayl" fontSize="xs">
                     <IconButton
-                      icon={<Mic size={18} />}
+                      icon={<Paperclip size={16} />}
                       variant="ghost"
-                      size="sm"
-                      colorScheme="red"
+                      size="xs"
+                      aria-label="Fayl"
+                      color="whiteAlpha.900"
+                      _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                      h="32px"
+                      w="32px"
+                      minW="32px"
+                    />
+                  </Tooltip>
+                  <Tooltip label="Ovoz" fontSize="xs">
+                    <IconButton
+                      icon={<Mic size={16} />}
+                      variant="ghost"
+                      size="xs"
+                      color="red.200"
                       onClick={startRecording}
                       aria-label="Voice"
+                      _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                      h="32px"
+                      w="32px"
+                      minW="32px"
                     />
                   </Tooltip>
                   <IconButton
-                    icon={<Send size={18} />}
-                    colorScheme="blue"
-                    size="sm"
+                    icon={<Send size={16} />}
+                    size="xs"
+                    aria-label="Yuborish"
                     onClick={handleSendMessage}
                     isLoading={sending}
-                    aria-label="Yuborish"
+                    bg="rgba(30,144,255,0.22)"
+                    border="1px solid rgba(30,144,255,0.28)"
+                    color="whiteAlpha.900"
+                    _hover={{ bg: "rgba(30,144,255,0.30)" }}
+                    h="32px"
+                    w="32px"
+                    minW="32px"
                   />
                 </HStack>
               </InputRightElement>
             </InputGroup>
           )}
-        </CardBody>
-      </Card>
+        </Box>
+      </Box>
 
+      {/* ================= MODALS ================= */}
       {/* Edit Modal */}
-      <Modal isOpen={isEditOpen} onClose={onEditClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Xabarni tahrirlash</ModalHeader>
-          <ModalCloseButton />
+      <Modal isOpen={isEditOpen} onClose={onEditClose} isCentered size="md">
+        <ModalOverlay bg="rgba(0,0,0,0.5)" />
+        <ModalContent
+          bg="rgba(10, 18, 38, 0.90)"
+          border="1px solid rgba(255,255,255,0.10)"
+          color="whiteAlpha.900"
+          borderRadius="lg"
+          boxShadow="0 12px 40px rgba(0,0,0,0.4)"
+          backdropFilter="blur(10px)"
+          mx={3}
+        >
+          <ModalHeader fontSize="md" fontWeight="700">Xabarni tahrirlash</ModalHeader>
+          <ModalCloseButton size="sm" />
           <ModalBody>
             <Textarea
               value={editingContent}
               onChange={(e) => setEditingContent(e.target.value)}
               placeholder="Yangi matn kiriting..."
               rows={4}
+              {...textareaDark}
             />
           </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onEditClose}>
+          <ModalFooter gap={2} flexDir={{ base: "column", sm: "row" }}>
+            <Button w="full" {...btnGhost} onClick={onEditClose} fontSize="sm">
               Bekor qilish
             </Button>
-            <Button colorScheme="blue" onClick={handleEditSubmit} isDisabled={!editingContent.trim()}>
+            <Button
+              w="full"
+              bg="rgba(30,144,255,0.22)"
+              border="1px solid rgba(30,144,255,0.28)"
+              color="whiteAlpha.900"
+              _hover={{ bg: "rgba(30,144,255,0.30)" }}
+              onClick={handleEditSubmit}
+              isDisabled={!editingContent.trim()}
+              fontSize="sm"
+            >
               Saqlash
             </Button>
           </ModalFooter>
@@ -1107,19 +1535,37 @@ export default function ChatDetail() {
       </Modal>
 
       {/* Delete Modal */}
-      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Xabarni o'chirish</ModalHeader>
-          <ModalCloseButton />
+      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered>
+        <ModalOverlay bg="rgba(0,0,0,0.5)" />
+        <ModalContent
+          bg="rgba(10, 18, 38, 0.90)"
+          border="1px solid rgba(255,255,255,0.10)"
+          color="whiteAlpha.900"
+          borderRadius="lg"
+          boxShadow="0 12px 40px rgba(0,0,0,0.4)"
+          backdropFilter="blur(10px)"
+          mx={3}
+        >
+          <ModalHeader fontSize="md" fontWeight="700">Xabarni o'chirish</ModalHeader>
+          <ModalCloseButton size="sm" />
           <ModalBody>
-            <Text>Ushbu xabarni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.</Text>
+            <Text color="whiteAlpha.800" fontSize="sm">
+              Ushbu xabarni o'chirishni xohlaysizmi? Bu amalni bekor qilib bo'lmaydi.
+            </Text>
           </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onDeleteClose}>
+          <ModalFooter gap={2} flexDir={{ base: "column", sm: "row" }}>
+            <Button w="full" {...btnGhost} onClick={onDeleteClose} fontSize="sm">
               Bekor qilish
             </Button>
-            <Button colorScheme="red" onClick={handleDeleteConfirm}>
+            <Button
+              w="full"
+              bg="rgba(255,0,80,0.12)"
+              border="1px solid rgba(255,0,80,0.18)"
+              color="whiteAlpha.900"
+              _hover={{ bg: "rgba(255,0,80,0.16)" }}
+              onClick={handleDeleteConfirm}
+              fontSize="sm"
+            >
               O'chirish
             </Button>
           </ModalFooter>
@@ -1134,11 +1580,17 @@ export default function ChatDetail() {
           top={`${contextMenu.y}px`}
           left={`${contextMenu.x}px`}
           zIndex={2000}
-          minW="200px"
+          minW="160px"
+          bg="rgba(10,18,38,0.95)"
+          border="1px solid rgba(255,255,255,0.10)"
+          color="whiteAlpha.900"
+          fontSize="sm"
         >
           {contextMenu.message?.type === "text" && (
             <MenuItem
-              icon={<Copy size={16} />}
+              icon={<Copy size={14} />}
+              bg="transparent"
+              _hover={{ bg: "rgba(255,255,255,0.06)" }}
               onClick={() => {
                 handleCopyMessage(contextMenu.message.content);
                 closeContextMenu();
@@ -1152,7 +1604,9 @@ export default function ChatDetail() {
             contextMenu.message.type === "text" &&
             canEditDelete(contextMenu.message) && (
               <MenuItem
-                icon={<Edit2 size={16} />}
+                icon={<Edit2 size={14} />}
+                bg="transparent"
+                _hover={{ bg: "rgba(255,255,255,0.06)" }}
                 onClick={() => {
                   handleEditClick(contextMenu.message);
                   closeContextMenu();
@@ -1164,8 +1618,10 @@ export default function ChatDetail() {
 
           {contextMenu.message && canEditDelete(contextMenu.message) && (
             <MenuItem
-              icon={<Trash2 size={16} />}
-              color="red.500"
+              icon={<Trash2 size={14} />}
+              bg="transparent"
+              color="red.300"
+              _hover={{ bg: "rgba(255,0,80,0.12)" }}
               onClick={() => {
                 handleDeleteClick(contextMenu.message);
                 closeContextMenu();
@@ -1177,32 +1633,46 @@ export default function ChatDetail() {
         </MenuList>
       </Menu>
 
-      {/* ✅ DISPUTE MODAL (YANGI) */}
-      <Modal isOpen={isDisputeOpen} onClose={onDisputeClose} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Dispute ochish</ModalHeader>
-          <ModalCloseButton />
+      {/* Dispute Modal */}
+      <Modal isOpen={isDisputeOpen} onClose={onDisputeClose} size="md" isCentered>
+        <ModalOverlay bg="rgba(0,0,0,0.5)" />
+        <ModalContent
+          bg="rgba(10, 18, 38, 0.90)"
+          border="1px solid rgba(255,255,255,0.10)"
+          color="whiteAlpha.900"
+          borderRadius="lg"
+          boxShadow="0 12px 40px rgba(0,0,0,0.4)"
+          backdropFilter="blur(10px)"
+          mx={3}
+        >
+          <ModalHeader fontSize="md" fontWeight="700">Dispute ochish</ModalHeader>
+          <ModalCloseButton size="sm" />
           <ModalBody>
-            <Text fontSize="sm" color="gray.600" mb={2}>
+            <Text fontSize="12px" color="whiteAlpha.700" mb={2}>
               Nizo sababi (reason) ni yozing:
             </Text>
             <Textarea
               value={disputeReason}
               onChange={(e) => setDisputeReason(e.target.value)}
               placeholder="Masalan: ish bajarilmadi, deadline o'tdi, kelishuv buzildi..."
-              rows={5}
+              rows={4}
+              {...textareaDark}
             />
           </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onDisputeClose}>
+          <ModalFooter gap={2} flexDir={{ base: "column", sm: "row" }}>
+            <Button w="full" {...btnGhost} onClick={onDisputeClose} fontSize="sm">
               Bekor
             </Button>
             <Button
-              colorScheme="red"
+              w="full"
+              bg="rgba(255,0,80,0.12)"
+              border="1px solid rgba(255,0,80,0.18)"
+              color="whiteAlpha.900"
+              _hover={{ bg: "rgba(255,0,80,0.16)" }}
               onClick={createDispute}
               isLoading={disputeCreating}
               isDisabled={!disputeReason.trim()}
+              fontSize="sm"
             >
               Dispute ochish
             </Button>
