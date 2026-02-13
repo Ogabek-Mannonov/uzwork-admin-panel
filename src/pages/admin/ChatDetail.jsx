@@ -7,9 +7,6 @@ import {
   Text,
   Flex,
   Avatar,
-  Card,
-  CardHeader,
-  CardBody,
   VStack,
   HStack,
   Input,
@@ -194,7 +191,7 @@ export default function ChatDetail() {
     message: null,
   });
 
-  // ✅ Dispute modal states (YANGI)
+  // ✅ Dispute modal states
   const { isOpen: isDisputeOpen, onClose: onDisputeClose } = useDisclosure();
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeCreating, setDisputeCreating] = useState(false);
@@ -237,6 +234,7 @@ export default function ChatDetail() {
     const full = `${fn} ${ln}`.trim();
     return full || fallbackRole || "User";
   };
+
   const buildUsername = (u, fallback) => {
     const un = (u?.username || fallback || "").toString().trim();
     return un ? `@${un}` : "";
@@ -251,33 +249,24 @@ export default function ChatDetail() {
         const res = await api(`/messages/${chatId}`);
         const payload = res?.data ?? res;
 
+        // ✅ universal root (ba'zida data ichida keladi)
+        const root = payload?.data ?? payload;
+
         // messages normalize
         let fetchedMessages = [];
-        if (payload?.messages) fetchedMessages = payload.messages;
-        else if (payload?.data?.messages) fetchedMessages = payload.data.messages;
-        else if (Array.isArray(payload)) fetchedMessages = payload;
+        if (root?.messages) fetchedMessages = root.messages;
+        else if (root?.data?.messages) fetchedMessages = root.data.messages;
+        else if (Array.isArray(root)) fetchedMessages = root;
 
         setMessages(fetchedMessages || []);
 
-        const clientData = payload?.client || payload?.data?.client || null;
-        const freelancerData =
-          payload?.freelancer || payload?.data?.freelancer || null;
+        // ✅ participants from backend
+        const clientData = root?.client || root?.data?.client || null;
+        const freelancerData = root?.freelancer || root?.data?.freelancer || null;
 
-        const jobTitle =
-          payload?.job?.title ||
-          payload?.job_title ||
-          payload?.contract?.job_title ||
-          payload?.data?.job?.title ||
-          payload?.data?.job_title ||
-          "";
-
-        const jobId =
-          payload?.job?.id ||
-          payload?.job_id ||
-          payload?.contract?.job_id ||
-          payload?.data?.job?.id ||
-          payload?.data?.job_id ||
-          null;
+        // ✅ job
+        const jobTitle = root?.job?.title || root?.data?.job?.title || "";
+        const jobId = root?.job?.id || root?.data?.job?.id || null;
 
         setChatInfo({
           client: clientData,
@@ -606,7 +595,7 @@ export default function ChatDetail() {
         existing.pause();
       } catch (e) {
         console.error("Pause error:", e);
-      } 
+      }
       setPlayingAudioId(null);
     } else {
       existing.play().catch((err) => console.error("Play error:", err));
@@ -630,7 +619,7 @@ export default function ChatDetail() {
 
   const handleEditClick = (message) => {
     setSelectedMessage(message);
-    setEditingContent(message.content);
+    setEditingContent(message.content || "");
     onEditOpen();
   };
 
@@ -704,7 +693,7 @@ export default function ChatDetail() {
   };
 
   const handleCopyMessage = (content) => {
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(String(content || ""));
     toast({
       title: "Nusxalandi",
       description: "Xabar nusxalandi",
@@ -736,7 +725,7 @@ export default function ChatDetail() {
     });
   }, [messages]);
 
-  // ✅ CREATE DISPUTE (YANGI)
+  // ✅ CREATE DISPUTE
   const createDispute = async () => {
     if (!disputeReason.trim()) {
       toast({
@@ -803,10 +792,19 @@ export default function ChatDetail() {
     return (
       <Flex justify="center" align="center" h="70vh">
         <Spinner size="lg" color="blue.300" thickness="3px" />
-        <Text ml={4} color="gray.500" fontSize="sm">Chat yuklanmoqda...</Text>
+        <Text ml={4} color="gray.500" fontSize="sm">
+          Chat yuklanmoqda...
+        </Text>
       </Flex>
     );
   }
+
+  const clientLine = chatInfo.client
+    ? `${buildName(chatInfo.client, "Client")} ${buildUsername(chatInfo.client, "client")}`.trim()
+    : "Client ?";
+  const freelancerLine = chatInfo.freelancer
+    ? `${buildName(chatInfo.freelancer, "Freelancer")} ${buildUsername(chatInfo.freelancer, "freelancer")}`.trim()
+    : "Freelancer ?";
 
   return (
     <Box
@@ -820,7 +818,7 @@ export default function ChatDetail() {
       onClick={closeContextMenu}
       bg="rgba(5,10,20,0.3)"
     >
-      {/* ================= HEADER (sticky, compact) ================= */}
+      {/* ================= HEADER ================= */}
       <Box {...HEADER_CARD} position="sticky" top="0" zIndex={5} w="full">
         <Box {...SHINE_OVERLAY} />
         <Box position="relative" p={{ base: 3, md: 4 }}>
@@ -849,6 +847,11 @@ export default function ChatDetail() {
                     ? `Job #${String(chatInfo.jobId).slice(0, 8)}`
                     : "Chat"}
                 </Heading>
+
+                {/* ✅ Title ostida Client • Freelancer */}
+                <Text fontSize="11px" color="whiteAlpha.700" mt={1} noOfLines={1}>
+                  {clientLine} {"  •  "} {freelancerLine}
+                </Text>
 
                 <Text fontSize="11px" color="whiteAlpha.600" mt={0.5} noOfLines={1}>
                   Chat #{chatId.slice(0, 8)}...
@@ -917,7 +920,7 @@ export default function ChatDetail() {
         </Box>
       </Box>
 
-      {/* ================= MESSAGES AREA (flex grow) ================= */}
+      {/* ================= MESSAGES AREA ================= */}
       <Box
         {...MESSAGES_CARD}
         flex="1"
@@ -938,12 +941,8 @@ export default function ChatDetail() {
           flexDirection="column"
           gap={{ base: 2, md: 2.5 }}
           css={{
-            "&::-webkit-scrollbar": {
-              width: "6px",
-            },
-            "&::-webkit-scrollbar-track": {
-              background: "rgba(255,255,255,0.02)",
-            },
+            "&::-webkit-scrollbar": { width: "6px" },
+            "&::-webkit-scrollbar-track": { background: "rgba(255,255,255,0.02)" },
             "&::-webkit-scrollbar-thumb": {
               background: "rgba(255,255,255,0.10)",
               borderRadius: "3px",
@@ -966,6 +965,7 @@ export default function ChatDetail() {
               let avatarBg = "gray.500";
               let username = "";
 
+              // ✅ sender info: admin yoki client/freelancer
               if (msg.sender_role === "admin") {
                 senderName = "Admin";
                 avatarBg = "blue.500";
@@ -974,17 +974,36 @@ export default function ChatDetail() {
                 normalizeId(msg.sender_id) === normalizeId(chatInfo.client?.id)
               ) {
                 sender = chatInfo.client;
-                senderName = buildName(sender, "Client");
-                username = buildUsername(sender, msg.sender_username);
+                senderName = sender
+                  ? buildName(sender, "Client")
+                  : `${String(msg.sender_first_name || "").trim()} ${String(
+                      msg.sender_last_name || ""
+                    ).trim()}`.trim() || "Client";
+                username = sender
+                  ? buildUsername(sender, msg.sender_username)
+                  : buildUsername(null, msg.sender_username);
                 avatarBg = "rgba(255,0,80,0.35)";
               } else if (
                 msg.sender_role === "freelancer" ||
                 normalizeId(msg.sender_id) === normalizeId(chatInfo.freelancer?.id)
               ) {
                 sender = chatInfo.freelancer;
-                senderName = buildName(sender, "Freelancer");
-                username = buildUsername(sender, msg.sender_username);
+                senderName = sender
+                  ? buildName(sender, "Freelancer")
+                  : `${String(msg.sender_first_name || "").trim()} ${String(
+                      msg.sender_last_name || ""
+                    ).trim()}`.trim() || "Freelancer";
+                username = sender
+                  ? buildUsername(sender, msg.sender_username)
+                  : buildUsername(null, msg.sender_username);
                 avatarBg = "rgba(255,170,0,0.35)";
+              } else {
+                // fallback (history'larda ham ishlaydi)
+                senderName =
+                  `${String(msg.sender_first_name || "").trim()} ${String(
+                    msg.sender_last_name || ""
+                  ).trim()}`.trim() || "User";
+                username = buildUsername(null, msg.sender_username);
               }
 
               const isAdminMessage = msg.sender_role === "admin";
@@ -1002,7 +1021,6 @@ export default function ChatDetail() {
                 ? `/admin/users/${senderUserId}`
                 : "#";
 
-              // ✅ Telegram-style narrow bubbles
               const bubbleMaxW = { base: "85%", md: "70%", lg: "55%" };
 
               const bubbleBg = isAdminMessage
@@ -1046,7 +1064,7 @@ export default function ChatDetail() {
                     gap={1}
                     role="group"
                   >
-                    {/* Sender info - compact */}
+                    {/* ✅ Sender info (name + username) */}
                     <Flex
                       as={!isAdminMessage && senderUserId ? Link : "div"}
                       to={!isAdminMessage && senderUserId ? senderProfileLink : undefined}
@@ -1066,9 +1084,7 @@ export default function ChatDetail() {
                           {username}
                         </Text>
                       )}
-                      {isAdminMessage && (
-                        <Badge {...adminBadgeStyle}>ADMIN</Badge>
-                      )}
+                      {isAdminMessage && <Badge {...adminBadgeStyle}>ADMIN</Badge>}
                     </Flex>
 
                     {/* Message bubble */}
@@ -1278,14 +1294,9 @@ export default function ChatDetail() {
                           </Box>
                         )}
 
-                        {/* Divider & metadata */}
                         <Divider mt={2} mb={1.5} borderColor="rgba(255,255,255,0.05)" />
 
-                        <HStack
-                          justify="space-between"
-                          fontSize="10px"
-                          color="whiteAlpha.600"
-                        >
+                        <HStack justify="space-between" fontSize="10px" color="whiteAlpha.600">
                           <Text>
                             {new Date(msg.created_at).toLocaleString("uz-UZ", {
                               dateStyle: "short",
@@ -1331,7 +1342,7 @@ export default function ChatDetail() {
         </Box>
       </Box>
 
-      {/* ================= COMPOSER (compact, sticky) ================= */}
+      {/* ================= COMPOSER ================= */}
       <Box {...COMPOSER_CARD} w="full">
         <Box {...SHINE_OVERLAY} />
         <Box position="relative" p={{ base: 2.5, md: 3 }}>
@@ -1339,7 +1350,13 @@ export default function ChatDetail() {
             <VStack spacing={2} mb={3}>
               <HStack justify="space-between" w="full" fontSize="sm">
                 <HStack>
-                  <Box w={2.5} h={2.5} bg="red.400" borderRadius="full" animation="pulse 1s infinite" />
+                  <Box
+                    w={2.5}
+                    h={2.5}
+                    bg="red.400"
+                    borderRadius="full"
+                    animation="pulse 1s infinite"
+                  />
                   <Text fontWeight="600" color="whiteAlpha.900">
                     Yozilmoqda...
                   </Text>
@@ -1436,7 +1453,7 @@ export default function ChatDetail() {
                 placeholder="Xabar yozing..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && !sending && handleSendMessage()}
+                onKeyDown={(e) => e.key === "Enter" && !sending && handleSendMessage()}
                 disabled={sending}
                 {...inputDark}
               />
@@ -1503,7 +1520,9 @@ export default function ChatDetail() {
           backdropFilter="blur(10px)"
           mx={3}
         >
-          <ModalHeader fontSize="md" fontWeight="700">Xabarni tahrirlash</ModalHeader>
+          <ModalHeader fontSize="md" fontWeight="700">
+            Xabarni tahrirlash
+          </ModalHeader>
           <ModalCloseButton size="sm" />
           <ModalBody>
             <Textarea
@@ -1546,7 +1565,9 @@ export default function ChatDetail() {
           backdropFilter="blur(10px)"
           mx={3}
         >
-          <ModalHeader fontSize="md" fontWeight="700">Xabarni o'chirish</ModalHeader>
+          <ModalHeader fontSize="md" fontWeight="700">
+            Xabarni o'chirish
+          </ModalHeader>
           <ModalCloseButton size="sm" />
           <ModalBody>
             <Text color="whiteAlpha.800" fontSize="sm">
@@ -1645,7 +1666,9 @@ export default function ChatDetail() {
           backdropFilter="blur(10px)"
           mx={3}
         >
-          <ModalHeader fontSize="md" fontWeight="700">Dispute ochish</ModalHeader>
+          <ModalHeader fontSize="md" fontWeight="700">
+            Dispute ochish
+          </ModalHeader>
           <ModalCloseButton size="sm" />
           <ModalBody>
             <Text fontSize="12px" color="whiteAlpha.700" mb={2}>
