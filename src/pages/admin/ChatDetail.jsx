@@ -51,7 +51,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import api from "../../lib/api";
 import socket from "../../utils/socket";
 
-/* ================= THEME (Telegram style - compact & modern) ================= */
+/* ================= THEME (your colors stay) ================= */
 const HEADER_CARD = {
   bg: "rgba(10, 18, 38, 0.52)",
   border: "1px solid",
@@ -100,8 +100,8 @@ const btnGhost = {
 };
 
 const inputDark = {
-  h: "40px",
-  borderRadius: "lg",
+  h: "42px",
+  borderRadius: "xl",
   bg: "rgba(255,255,255,0.05)",
   borderColor: "rgba(255,255,255,0.10)",
   color: "whiteAlpha.900",
@@ -140,6 +140,53 @@ const adminBadgeStyle = {
   letterSpacing: "0.2px",
 };
 
+/* ================= NEW: Telegram-ish layout helpers (no color change) ================= */
+const topMetaBadge = {
+  bg: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  color: "whiteAlpha.800",
+  borderRadius: "999px",
+  px: 2,
+  py: 0.5,
+  fontSize: "10px",
+  fontWeight: "700",
+};
+
+const personChip = {
+  bg: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: "999px",
+  px: 2,
+  py: 1.5,
+  gap: 2,
+  align: "center",
+};
+
+const scrollAreaCss = {
+  "&::-webkit-scrollbar": { width: "6px" },
+  "&::-webkit-scrollbar-track": { background: "rgba(255,255,255,0.02)" },
+  "&::-webkit-scrollbar-thumb": {
+    background: "rgba(255,255,255,0.10)",
+    borderRadius: "3px",
+  },
+  "&::-webkit-scrollbar-thumb:hover": { background: "rgba(255,255,255,0.15)" },
+};
+
+// ✅ Fix: icon alignment (Mic/Send) for Chakra IconButton + lucide
+const iconBtnSquare = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: "0",
+};
+
+// ✅ Fix: prevent horizontal scroll from long strings / flex
+const safeTextWrap = {
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  whiteSpace: "pre-wrap",
+};
+
 export default function ChatDetail() {
   const { chatId } = useParams();
   const toast = useToast();
@@ -171,9 +218,9 @@ export default function ChatDetail() {
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const audioRefs = useRef({});
 
-  // ✅ mini progress/time for voice messages
-  const [audioProgress, setAudioProgress] = useState({}); // { [messageId]: currentTime }
-  const [audioDuration, setAudioDuration] = useState({}); // { [messageId]: duration }
+  // mini progress/time for voice messages
+  const [audioProgress, setAudioProgress] = useState({});
+  const [audioDuration, setAudioDuration] = useState({});
 
   // Edit/Delete states
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -191,14 +238,13 @@ export default function ChatDetail() {
     message: null,
   });
 
-  // ✅ Dispute modal states
+  // Dispute modal states
   const { isOpen: isDisputeOpen, onClose: onDisputeClose } = useDisclosure();
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeCreating, setDisputeCreating] = useState(false);
 
   // ====== Current user info / role ======
   const normalizeId = (id) => (id == null ? null : String(id));
-
   const currentUserId = normalizeId(localStorage.getItem("userId"));
 
   const roleRaw =
@@ -227,7 +273,7 @@ export default function ChatDetail() {
 
   const goUserLink = (u) => (u?.id ? `/admin/users/${u.id}` : "#");
 
-  // ✅ helper: full name + username
+  // helper: full name + username
   const buildName = (u, fallbackRole) => {
     const fn = u?.first_name || "";
     const ln = u?.last_name || "";
@@ -249,10 +295,8 @@ export default function ChatDetail() {
         const res = await api(`/messages/${chatId}`);
         const payload = res?.data ?? res;
 
-        // ✅ universal root (ba'zida data ichida keladi)
         const root = payload?.data ?? payload;
 
-        // messages normalize
         let fetchedMessages = [];
         if (root?.messages) fetchedMessages = root.messages;
         else if (root?.data?.messages) fetchedMessages = root.data.messages;
@@ -260,11 +304,10 @@ export default function ChatDetail() {
 
         setMessages(fetchedMessages || []);
 
-        // ✅ participants from backend
         const clientData = root?.client || root?.data?.client || null;
-        const freelancerData = root?.freelancer || root?.data?.freelancer || null;
+        const freelancerData =
+          root?.freelancer || root?.data?.freelancer || null;
 
-        // ✅ job
         const jobTitle = root?.job?.title || root?.data?.job?.title || "";
         const jobId = root?.job?.id || root?.data?.job?.id || null;
 
@@ -324,7 +367,9 @@ export default function ChatDetail() {
 
     socket.on("messageDeleted", ({ messageId }) => {
       const deleteId = normalizeId(messageId);
-      setMessages((prev) => prev.filter((msg) => normalizeId(msg.id) !== deleteId));
+      setMessages((prev) =>
+        prev.filter((msg) => normalizeId(msg.id) !== deleteId)
+      );
     });
 
     return () => {
@@ -334,7 +379,6 @@ export default function ChatDetail() {
       socket.off("messageDeleted");
       socket.disconnect();
 
-      // ✅ stop all audios on unmount
       try {
         Object.values(audioRefs.current || {}).forEach((a) => {
           try {
@@ -392,19 +436,16 @@ export default function ChatDetail() {
     scrollToBottom();
   }, [messages]);
 
-  // Voice recording functions
+  // Voice recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
@@ -490,9 +531,7 @@ export default function ChatDetail() {
       const uploadData = await uploadRes.json();
       const voiceUrl = uploadData.data.url;
 
-      const res = await api.post(`/messages/${chatId}/voice`, {
-        voice_url: voiceUrl,
-      });
+      const res = await api.post(`/messages/${chatId}/voice`, { voice_url: voiceUrl });
 
       const payload = res?.data ?? res;
       const sentMessage = payload?.message || payload?.data?.message;
@@ -529,16 +568,14 @@ export default function ChatDetail() {
     }
   };
 
-  // ✅ improved audio playback with progress/time
+  // Audio playback with progress
   const toggleAudioPlayback = (messageId, audioUrl) => {
     let fullAudioUrl = audioUrl;
-
     if (audioUrl && !String(audioUrl).startsWith("http")) {
       const baseURL = import.meta.env.VITE_API_URL || "http://localhost:3000";
       fullAudioUrl = `${baseURL}${audioUrl}`;
     }
 
-    // stop currently playing if different
     if (playingAudioId && playingAudioId !== messageId) {
       const prevAudio = audioRefs.current[playingAudioId];
       if (prevAudio) {
@@ -557,7 +594,7 @@ export default function ChatDetail() {
       audioRefs.current[messageId] = newAudio;
 
       newAudio.onerror = (e) => {
-        console.error("❌ Audio playback error:", e);
+        console.error("Audio playback error:", e);
         toast({
           title: "Xato",
           description: "Audio faylni yuklab bo'lmadi",
@@ -585,7 +622,7 @@ export default function ChatDetail() {
         setAudioProgress((prev) => ({ ...prev, [messageId]: 0 }));
       };
 
-      newAudio.play().catch((err) => console.error("Play error:", err));
+      newAudio.play().catch(() => {});
       setPlayingAudioId(messageId);
       return;
     }
@@ -593,12 +630,10 @@ export default function ChatDetail() {
     if (playingAudioId === messageId) {
       try {
         existing.pause();
-      } catch (e) {
-        console.error("Pause error:", e);
-      }
+      } catch {}
       setPlayingAudioId(null);
     } else {
-      existing.play().catch((err) => console.error("Play error:", err));
+      existing.play().catch(() => {});
       setPlayingAudioId(messageId);
     }
   };
@@ -610,7 +645,65 @@ export default function ChatDetail() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // ====== Edit/Delete permissions ======
+  // ✅ NEW: Telegram-style DATE SEPARATOR helpers
+  const isSameDay = (a, b) => {
+    if (!a || !b) return false;
+    const da = new Date(a);
+    const db = new Date(b);
+    return (
+      da.getFullYear() === db.getFullYear() &&
+      da.getMonth() === db.getMonth() &&
+      da.getDate() === db.getDate()
+    );
+  };
+
+  const startOfDay = (d) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+
+  const dayDiff = (a, b) => {
+    const da = startOfDay(a).getTime();
+    const db = startOfDay(b).getTime();
+    return Math.round((da - db) / (1000 * 60 * 60 * 24));
+  };
+
+  const formatDayLabel = (dateLike) => {
+    if (!dateLike) return "";
+    const now = new Date();
+    const d = new Date(dateLike);
+
+    const diff = dayDiff(now, d); // 0=Bugun, 1=Kecha
+    if (diff === 0) return "Bugun";
+    if (diff === 1) return "Kecha";
+
+    return d.toLocaleDateString("uz-UZ", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const DateSeparator = ({ label }) => (
+    <Flex justify="center" py={2} px={2}>
+      <Box
+        px={3}
+        py={1.5}
+        borderRadius="999px"
+        bg="rgba(255,255,255,0.06)"
+        border="1px solid rgba(255,255,255,0.10)"
+        color="whiteAlpha.800"
+        fontSize="11px"
+        fontWeight="800"
+        letterSpacing="0.2px"
+      >
+        {label}
+      </Box>
+    </Flex>
+  );
+
+  // Edit/Delete permissions
   const canEditDelete = (message) => {
     if (!message) return false;
     if (isAdmin) return true;
@@ -668,7 +761,6 @@ export default function ChatDetail() {
 
     try {
       await api.delete(`/messages/${selectedMessage.id}`);
-
       const deleteId = normalizeId(selectedMessage.id);
       setMessages((prev) => prev.filter((msg) => normalizeId(msg.id) !== deleteId));
 
@@ -702,12 +794,27 @@ export default function ChatDetail() {
     });
   };
 
+  const MENU_W = 180; // menu minW 160 bo'lgani uchun biroz zaxira
+  const MENU_H = 140; // 3 item atrofida
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
+
   const openContextMenu = (event, message) => {
     event.preventDefault();
+    event.stopPropagation();
+
+    const padding = 8;
+
+    const maxX = window.innerWidth - MENU_W - padding;
+    const maxY = window.innerHeight - MENU_H - padding;
+
+    const x = clamp(event.clientX, padding, maxX);
+    const y = clamp(event.clientY, padding, maxY);
+
     setContextMenu({
       isOpen: true,
-      x: event.clientX,
-      y: event.clientY,
+      x,
+      y,
       message,
     });
   };
@@ -725,7 +832,7 @@ export default function ChatDetail() {
     });
   }, [messages]);
 
-  // ✅ CREATE DISPUTE
+  // CREATE DISPUTE
   const createDispute = async () => {
     if (!disputeReason.trim()) {
       toast({
@@ -762,24 +869,15 @@ export default function ChatDetail() {
       if (dispute?.id) navigate(`/admin/disputes/${dispute.id}`);
     } catch (e) {
       console.error("createDispute error:", e);
-
       const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "Dispute ochishda xato";
-
-      toast({
-        title: "Xato",
-        description: msg,
-        status: "error",
-        duration: 3500,
-      });
+        e?.response?.data?.message || e?.message || "Dispute ochishda xato";
+      toast({ title: "Xato", description: msg, status: "error", duration: 3500 });
     } finally {
       setDisputeCreating(false);
     }
   };
 
-  // ✅ file open/download helpers
+  // file open/download helpers
   const buildFileUrl = (url) => {
     if (!url) return "";
     const s = String(url);
@@ -800,16 +898,29 @@ export default function ChatDetail() {
   }
 
   const clientLine = chatInfo.client
-    ? `${buildName(chatInfo.client, "Client")} ${buildUsername(chatInfo.client, "client")}`.trim()
+    ? `${buildName(chatInfo.client, "Client")} ${buildUsername(
+        chatInfo.client,
+        "client"
+      )}`.trim()
     : "Client ?";
   const freelancerLine = chatInfo.freelancer
-    ? `${buildName(chatInfo.freelancer, "Freelancer")} ${buildUsername(chatInfo.freelancer, "freelancer")}`.trim()
+    ? `${buildName(chatInfo.freelancer, "Freelancer")} ${buildUsername(
+        chatInfo.freelancer,
+        "freelancer"
+      )}`.trim()
     : "Freelancer ?";
 
+  const jobTitle =
+    chatInfo.jobTitle?.trim() ||
+    (chatInfo.jobId ? `Job #${String(chatInfo.jobId).slice(0, 8)}` : "Chat");
+
+  /* ================= RENDER ================= */
   return (
     <Box
       w="full"
       h="calc(100vh - 90px)"
+      minH="0"
+      overflow="hidden"
       display="flex"
       flexDirection="column"
       px={{ base: 2, md: 3, lg: 4 }}
@@ -821,52 +932,61 @@ export default function ChatDetail() {
       {/* ================= HEADER ================= */}
       <Box {...HEADER_CARD} position="sticky" top="0" zIndex={5} w="full">
         <Box {...SHINE_OVERLAY} />
-        <Box position="relative" p={{ base: 3, md: 4 }}>
-          <Flex align="start" justify="space-between" gap={3} wrap="wrap">
-            <HStack spacing={2} align="start" flex="1" minW="0">
+        <Box position="relative" px={{ base: 3, md: 4 }} py={{ base: 3, md: 3.5 }}>
+          <Flex align="center" justify="space-between" gap={3}>
+            <HStack spacing={3} minW="0" flex="1">
               <Link to="/admin/chats">
                 <IconButton
                   aria-label="Back"
-                  icon={<ArrowLeft size={18} />}
+                  icon={<ArrowLeft size={18} style={{ display: "block" }} />}
                   {...btnGhost}
                   size="sm"
+                  {...iconBtnSquare}
                 />
               </Link>
 
-              <Box flex="1" minW="0">
-                <Heading
-                  size="sm"
-                  color="whiteAlpha.900"
-                  lineHeight="1.3"
-                  noOfLines={1}
-                  fontSize={{ base: "14px", md: "16px" }}
-                >
-                  {chatInfo.jobTitle?.trim()
-                    ? chatInfo.jobTitle
-                    : chatInfo.jobId
-                    ? `Job #${String(chatInfo.jobId).slice(0, 8)}`
-                    : "Chat"}
-                </Heading>
+              <Box minW="0" flex="1">
+                <HStack justify="space-between" align="start" spacing={3}>
+                  <Box minW="0">
+                    <Heading
+                      size="sm"
+                      color="whiteAlpha.900"
+                      lineHeight="1.25"
+                      noOfLines={1}
+                      fontSize={{ base: "14px", md: "16px" }}
+                    >
+                      {jobTitle}
+                    </Heading>
 
-                {/* ✅ Title ostida Client • Freelancer */}
-                <Text fontSize="11px" color="whiteAlpha.700" mt={1} noOfLines={1}>
-                  {clientLine} {"  •  "} {freelancerLine}
-                </Text>
+                    <Text
+                      fontSize="11px"
+                      color="whiteAlpha.700"
+                      mt={1}
+                      noOfLines={1}
+                      {...safeTextWrap}
+                    >
+                      {clientLine} {"  •  "} {freelancerLine}
+                    </Text>
+                  </Box>
 
-                <Text fontSize="11px" color="whiteAlpha.600" mt={0.5} noOfLines={1}>
-                  Chat #{chatId.slice(0, 8)}...
-                </Text>
+                  <HStack spacing={2} flexShrink={0}>
+                    <Badge {...topMetaBadge}>Chat {chatId.slice(0, 8)}…</Badge>
+                  </HStack>
+                </HStack>
 
-                <HStack spacing={3} mt={2} wrap="wrap" fontSize="xs">
-                  {/* Client */}
+                <HStack spacing={2} mt={2} flexWrap="wrap">
                   {chatInfo.client && (
                     <Flex
                       as={chatInfo.client?.id ? Link : "div"}
-                      to={chatInfo.client?.id ? goUserLink(chatInfo.client) : undefined}
-                      align="center"
-                      gap={1.5}
+                      to={
+                        chatInfo.client?.id
+                          ? `/admin/users/${chatInfo.client.id}`
+                          : undefined
+                      }
+                      {...personChip}
                       cursor={chatInfo.client?.id ? "pointer" : "default"}
-                      _hover={chatInfo.client?.id ? { opacity: 0.85 } : undefined}
+                      _hover={chatInfo.client?.id ? { opacity: 0.9 } : undefined}
+                      minW="0"
                     >
                       <Avatar
                         name={buildName(chatInfo.client, "C")}
@@ -876,25 +996,46 @@ export default function ChatDetail() {
                         color="white"
                       />
                       <Box minW="0">
-                        <Text fontWeight="600" color="whiteAlpha.900" noOfLines={1}>
+                        <Text
+                          fontWeight="700"
+                          fontSize="12px"
+                          color="whiteAlpha.900"
+                          noOfLines={1}
+                        >
                           {buildName(chatInfo.client, "Client")}
                         </Text>
-                        <Text color="whiteAlpha.600" fontSize="10px" noOfLines={1}>
+                        <Text fontSize="10px" color="whiteAlpha.600" noOfLines={1}>
                           {buildUsername(chatInfo.client, "client")}
                         </Text>
                       </Box>
+                      <Badge
+                        bg="rgba(255,0,80,0.10)"
+                        border="1px solid rgba(255,0,80,0.14)"
+                        color="whiteAlpha.900"
+                        borderRadius="999px"
+                        px={2}
+                        fontSize="9px"
+                        flexShrink={0}
+                      >
+                        CLIENT
+                      </Badge>
                     </Flex>
                   )}
 
-                  {/* Freelancer */}
                   {chatInfo.freelancer && (
                     <Flex
                       as={chatInfo.freelancer?.id ? Link : "div"}
-                      to={chatInfo.freelancer?.id ? goUserLink(chatInfo.freelancer) : undefined}
-                      align="center"
-                      gap={1.5}
+                      to={
+                        chatInfo.freelancer?.id
+                          ? `/admin/users/${chatInfo.freelancer.id}`
+                          : undefined
+                      }
+                      {...personChip}
                       cursor={chatInfo.freelancer?.id ? "pointer" : "default"}
-                      _hover={chatInfo.freelancer?.id ? { opacity: 0.85 } : undefined}
+                      _hover={
+                        chatInfo.freelancer?.id ? { opacity: 0.9 } : undefined
+                      }
+                      minW="0"
                     >
                       <Avatar
                         name={buildName(chatInfo.freelancer, "F")}
@@ -904,13 +1045,29 @@ export default function ChatDetail() {
                         color="white"
                       />
                       <Box minW="0">
-                        <Text fontWeight="600" color="whiteAlpha.900" noOfLines={1}>
+                        <Text
+                          fontWeight="700"
+                          fontSize="12px"
+                          color="whiteAlpha.900"
+                          noOfLines={1}
+                        >
                           {buildName(chatInfo.freelancer, "Freelancer")}
                         </Text>
-                        <Text color="whiteAlpha.600" fontSize="10px" noOfLines={1}>
+                        <Text fontSize="10px" color="whiteAlpha.600" noOfLines={1}>
                           {buildUsername(chatInfo.freelancer, "freelancer")}
                         </Text>
                       </Box>
+                      <Badge
+                        bg="rgba(255,170,0,0.10)"
+                        border="1px solid rgba(255,170,0,0.14)"
+                        color="whiteAlpha.900"
+                        borderRadius="999px"
+                        px={2}
+                        fontSize="9px"
+                        flexShrink={0}
+                      >
+                        FREELANCER
+                      </Badge>
                     </Flex>
                   )}
                 </HStack>
@@ -921,36 +1078,20 @@ export default function ChatDetail() {
       </Box>
 
       {/* ================= MESSAGES AREA ================= */}
-      <Box
-        {...MESSAGES_CARD}
-        flex="1"
-        position="relative"
-        w="full"
-        minH="0"
-        display="flex"
-        flexDirection="column"
-      >
+      <Box {...MESSAGES_CARD} flex="1" minH="0" position="relative" w="full">
         <Box {...SHINE_OVERLAY} />
+
         <Box
           position="relative"
-          flex="1"
+          h="full"
           overflowY="auto"
+          overflowX="hidden"
           px={{ base: 2, md: 4 }}
-          py={{ base: 2, md: 3 }}
+          py={{ base: 3, md: 4 }}
+          css={scrollAreaCss}
           display="flex"
           flexDirection="column"
-          gap={{ base: 2, md: 2.5 }}
-          css={{
-            "&::-webkit-scrollbar": { width: "6px" },
-            "&::-webkit-scrollbar-track": { background: "rgba(255,255,255,0.02)" },
-            "&::-webkit-scrollbar-thumb": {
-              background: "rgba(255,255,255,0.10)",
-              borderRadius: "3px",
-            },
-            "&::-webkit-scrollbar-thumb:hover": {
-              background: "rgba(255,255,255,0.15)",
-            },
-          }}
+          gap={2.5}
         >
           {visibleMessages.length === 0 ? (
             <Flex align="center" justify="center" h="full">
@@ -959,13 +1100,16 @@ export default function ChatDetail() {
               </Text>
             </Flex>
           ) : (
-            visibleMessages.map((msg) => {
-              let sender = null;
+            visibleMessages.map((msg, idx) => {
+              const prev = visibleMessages[idx - 1];
+              const showDateSep =
+                idx === 0 || !isSameDay(prev?.created_at, msg?.created_at);
+              const dateLabel = formatDayLabel(msg?.created_at);
+
               let senderName = "Unknown";
               let avatarBg = "gray.500";
               let username = "";
 
-              // ✅ sender info: admin yoki client/freelancer
               if (msg.sender_role === "admin") {
                 senderName = "Admin";
                 avatarBg = "blue.500";
@@ -973,7 +1117,7 @@ export default function ChatDetail() {
                 msg.sender_role === "client" ||
                 normalizeId(msg.sender_id) === normalizeId(chatInfo.client?.id)
               ) {
-                sender = chatInfo.client;
+                const sender = chatInfo.client;
                 senderName = sender
                   ? buildName(sender, "Client")
                   : `${String(msg.sender_first_name || "").trim()} ${String(
@@ -987,7 +1131,7 @@ export default function ChatDetail() {
                 msg.sender_role === "freelancer" ||
                 normalizeId(msg.sender_id) === normalizeId(chatInfo.freelancer?.id)
               ) {
-                sender = chatInfo.freelancer;
+                const sender = chatInfo.freelancer;
                 senderName = sender
                   ? buildName(sender, "Freelancer")
                   : `${String(msg.sender_first_name || "").trim()} ${String(
@@ -998,7 +1142,6 @@ export default function ChatDetail() {
                   : buildUsername(null, msg.sender_username);
                 avatarBg = "rgba(255,170,0,0.35)";
               } else {
-                // fallback (history'larda ham ishlaydi)
                 senderName =
                   `${String(msg.sender_first_name || "").trim()} ${String(
                     msg.sender_last_name || ""
@@ -1021,7 +1164,7 @@ export default function ChatDetail() {
                 ? `/admin/users/${senderUserId}`
                 : "#";
 
-              const bubbleMaxW = { base: "85%", md: "70%", lg: "55%" };
+              const bubbleMaxW = { base: "88%", md: "72%", lg: "58%" };
 
               const bubbleBg = isAdminMessage
                 ? "linear-gradient(135deg, rgba(30,144,255,0.28), rgba(30,144,255,0.14))"
@@ -1031,8 +1174,6 @@ export default function ChatDetail() {
                 ? "rgba(30,144,255,0.28)"
                 : "rgba(255,255,255,0.10)";
 
-              const bubbleShadow = "0 4px 12px rgba(0,0,0,0.20)";
-
               const cur = audioProgress[msg.id] || 0;
               const dur = audioDuration[msg.id] || 0;
               const pct = dur > 0 ? (cur / dur) * 100 : 0;
@@ -1040,300 +1181,323 @@ export default function ChatDetail() {
               const fileUrl = msg.file_url ? buildFileUrl(msg.file_url) : "";
 
               return (
-                <Flex
-                  key={normalizeId(msg.id)}
-                  align="flex-start"
-                  justify={isAdminMessage ? "flex-end" : "flex-start"}
-                  gap={1.5}
-                >
-                  {!isAdminMessage && (
-                    <Avatar
-                      name={senderName}
-                      size="xs"
-                      bg={avatarBg}
-                      color="white"
-                      flexShrink={0}
-                      mt={0.5}
-                    />
-                  )}
+                <React.Fragment key={normalizeId(msg.id)}>
+                  {showDateSep && <DateSeparator label={dateLabel} />}
 
-                  <Box
-                    maxW={bubbleMaxW}
-                    display="flex"
-                    flexDirection="column"
-                    gap={1}
-                    role="group"
+                  <Flex
+                    align="flex-end"
+                    justify={isAdminMessage ? "flex-end" : "flex-start"}
+                    gap={2}
+                    minW="0"
                   >
-                    {/* ✅ Sender info (name + username) */}
-                    <Flex
-                      as={!isAdminMessage && senderUserId ? Link : "div"}
-                      to={!isAdminMessage && senderUserId ? senderProfileLink : undefined}
-                      align="center"
+                    {!isAdminMessage && (
+                      <Avatar
+                        name={senderName}
+                        size="xs"
+                        bg={avatarBg}
+                        color="white"
+                        flexShrink={0}
+                        mb="2px"
+                      />
+                    )}
+
+                    <Box
+                      maxW={bubbleMaxW}
+                      minW="0"
+                      display="flex"
+                      flexDirection="column"
                       gap={1}
-                      alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
-                      cursor={!isAdminMessage && senderUserId ? "pointer" : "default"}
-                      _hover={!isAdminMessage && senderUserId ? { opacity: 0.88 } : undefined}
-                      px={isAdminMessage ? 0 : 2}
-                      fontSize="11px"
+                      role="group"
                     >
-                      <Text fontWeight="700" color="whiteAlpha.800">
-                        {senderName}
-                      </Text>
-                      {username && (
-                        <Text color="whiteAlpha.600" fontSize="10px">
-                          {username}
-                        </Text>
-                      )}
-                      {isAdminMessage && <Badge {...adminBadgeStyle}>ADMIN</Badge>}
-                    </Flex>
-
-                    {/* Message bubble */}
-                    <Box position="relative" onContextMenu={(e) => openContextMenu(e, msg)}>
-                      <Box
-                        bgGradient={isAdminMessage ? bubbleBg : undefined}
-                        bg={!isAdminMessage ? bubbleBg : undefined}
-                        border="1px solid"
-                        borderColor={bubbleBorder}
-                        color="whiteAlpha.900"
-                        p={{ base: 2.5, md: 3 }}
-                        borderRadius={{ base: "16px", md: "18px" }}
-                        boxShadow={bubbleShadow}
-                        position="relative"
-                        fontSize={{ base: "13px", md: "14px" }}
+                      <Flex
+                        as={!isAdminMessage && senderUserId ? Link : "div"}
+                        to={
+                          !isAdminMessage && senderUserId
+                            ? senderProfileLink
+                            : undefined
+                        }
+                        align="center"
+                        gap={1.5}
+                        alignSelf={isAdminMessage ? "flex-end" : "flex-start"}
+                        cursor={
+                          !isAdminMessage && senderUserId ? "pointer" : "default"
+                        }
+                        _hover={
+                          !isAdminMessage && senderUserId
+                            ? { opacity: 0.88 }
+                            : undefined
+                        }
+                        px={1}
+                        fontSize="11px"
+                        minW="0"
                       >
-                        {/* 3-dot menu */}
-                        {(canEdit || canDelete) && (
-                          <Box
-                            position="absolute"
-                            top="6px"
-                            right="8px"
-                            opacity={0}
-                            _groupHover={{ opacity: 1 }}
-                            transition="opacity 0.15s ease"
-                            zIndex={5}
-                          >
-                            <Menu>
-                              <MenuButton
-                                as={IconButton}
-                                icon={<MoreVertical size={14} />}
-                                size="xs"
-                                variant="ghost"
-                                aria-label="Options"
-                                bg="rgba(0,0,0,0.18)"
-                                border="1px solid rgba(255,255,255,0.10)"
-                                color="whiteAlpha.900"
-                                h="28px"
-                                w="28px"
-                                minW="28px"
-                                _hover={{ bg: "rgba(0,0,0,0.28)" }}
-                              />
-                              <MenuList
-                                bg="rgba(10,18,38,0.95)"
-                                border="1px solid rgba(255,255,255,0.10)"
-                                color="whiteAlpha.900"
-                                fontSize="sm"
-                              >
-                                {msg.type === "text" && (
-                                  <MenuItem
-                                    icon={<Copy size={14} />}
-                                    bg="transparent"
-                                    _hover={{ bg: "rgba(255,255,255,0.06)" }}
-                                    onClick={() => handleCopyMessage(msg.content)}
-                                  >
-                                    Nusxalash
-                                  </MenuItem>
-                                )}
-                                {canEdit && (
-                                  <MenuItem
-                                    icon={<Edit2 size={14} />}
-                                    bg="transparent"
-                                    _hover={{ bg: "rgba(255,255,255,0.06)" }}
-                                    onClick={() => handleEditClick(msg)}
-                                  >
-                                    Tahrirlash
-                                  </MenuItem>
-                                )}
-                                {canDelete && (
-                                  <MenuItem
-                                    icon={<Trash2 size={14} />}
-                                    bg="transparent"
-                                    color="red.300"
-                                    _hover={{ bg: "rgba(255,0,80,0.12)" }}
-                                    onClick={() => handleDeleteClick(msg)}
-                                  >
-                                    O'chirish
-                                  </MenuItem>
-                                )}
-                              </MenuList>
-                            </Menu>
-                          </Box>
+                        <Text fontWeight="800" color="whiteAlpha.800" noOfLines={1}>
+                          {senderName}
+                        </Text>
+                        {username && (
+                          <Text color="whiteAlpha.600" fontSize="10px" noOfLines={1}>
+                            {username}
+                          </Text>
                         )}
+                        {isAdminMessage && <Badge {...adminBadgeStyle}>ADMIN</Badge>}
+                      </Flex>
 
-                        {/* TEXT MESSAGE */}
-                        {msg.type === "text" && (
-                          <Box pr={8}>
-                            <Text whiteSpace="pre-wrap" lineHeight="1.5">
-                              {msg.content}
-                            </Text>
-                            {msg.is_edited && (
-                              <Text fontSize="10px" color="whiteAlpha.600" mt={1}>
-                                (tahrirlangan)
+                      <Box
+                        position="relative"
+                        onContextMenu={(e) => openContextMenu(e, msg)}
+                        minW="0"
+                      >
+                        <Box
+                          bgGradient={isAdminMessage ? bubbleBg : undefined}
+                          bg={!isAdminMessage ? bubbleBg : undefined}
+                          border="1px solid"
+                          borderColor={bubbleBorder}
+                          color="whiteAlpha.900"
+                          px={{ base: 3, md: 3.5 }}
+                          py={{ base: 2.5, md: 3 }}
+                          borderRadius="20px"
+                          boxShadow="0 4px 12px rgba(0,0,0,0.20)"
+                          position="relative"
+                          fontSize={{ base: "13px", md: "14px" }}
+                          minW="0"
+                          overflow="hidden"
+                        >
+                          {(canEdit || canDelete) && (
+                            <Box
+                              position="absolute"
+                              top="8px"
+                              right="10px"
+                              opacity={0}
+                              _groupHover={{ opacity: 1 }}
+                              transition="opacity 0.15s ease"
+                              zIndex={5}
+                            >
+                              <Menu>
+                                <MenuButton
+                                  as={IconButton}
+                                  icon={<MoreVertical size={14} style={{ display: "block" }} />}
+                                  size="xs"
+                                  variant="ghost"
+                                  aria-label="Options"
+                                  bg="rgba(0,0,0,0.18)"
+                                  border="1px solid rgba(255,255,255,0.10)"
+                                  color="whiteAlpha.900"
+                                  h="28px"
+                                  w="28px"
+                                  minW="28px"
+                                  _hover={{ bg: "rgba(0,0,0,0.28)" }}
+                                  {...iconBtnSquare}
+                                />
+                                <MenuList
+                                  bg="rgba(10,18,38,0.95)"
+                                  border="1px solid rgba(255,255,255,0.10)"
+                                  color="whiteAlpha.900"
+                                  fontSize="sm"
+                                >
+                                  {msg.type === "text" && (
+                                    <MenuItem
+                                      icon={<Copy size={14} />}
+                                      bg="transparent"
+                                      _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                                      onClick={() => handleCopyMessage(msg.content)}
+                                    >
+                                      Nusxalash
+                                    </MenuItem>
+                                  )}
+                                  {canEdit && (
+                                    <MenuItem
+                                      icon={<Edit2 size={14} />}
+                                      bg="transparent"
+                                      _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                                      onClick={() => handleEditClick(msg)}
+                                    >
+                                      Tahrirlash
+                                    </MenuItem>
+                                  )}
+                                  {canDelete && (
+                                    <MenuItem
+                                      icon={<Trash2 size={14} />}
+                                      bg="transparent"
+                                      color="red.300"
+                                      _hover={{ bg: "rgba(255,0,80,0.12)" }}
+                                      onClick={() => handleDeleteClick(msg)}
+                                    >
+                                      O'chirish
+                                    </MenuItem>
+                                  )}
+                                </MenuList>
+                              </Menu>
+                            </Box>
+                          )}
+
+                          {msg.type === "text" && (
+                            <Box pr={8} minW="0">
+                              <Text lineHeight="1.55" {...safeTextWrap}>
+                                {msg.content}
                               </Text>
-                            )}
-                          </Box>
-                        )}
+                              {msg.is_edited && (
+                                <Text fontSize="10px" color="whiteAlpha.600" mt={1}>
+                                  (tahrirlangan)
+                                </Text>
+                              )}
+                            </Box>
+                          )}
 
-                        {/* VOICE MESSAGE */}
-                        {msg.type === "voice" && msg.file_url && (
-                          <Box pr={8}>
-                            <HStack spacing={2} align="center">
-                              <IconButton
-                                icon={
-                                  playingAudioId === msg.id ? (
-                                    <Pause size={16} />
-                                  ) : (
-                                    <Play size={16} />
-                                  )
-                                }
-                                size="xs"
-                                aria-label="Play/Pause"
-                                bg="rgba(255,255,255,0.10)"
-                                border="1px solid rgba(255,255,255,0.12)"
-                                _hover={{ bg: "rgba(255,255,255,0.14)" }}
-                                onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
-                                h="32px"
-                                w="32px"
-                                minW="32px"
-                              />
-                              <Box flex="1" minW="0">
-                                <HStack justify="space-between" mb={1}>
-                                  <Text fontSize="12px" fontWeight="600">
-                                    Ovozli
+                          {msg.type === "voice" && msg.file_url && (
+                            <Box pr={8} minW="0">
+                              <HStack spacing={2} align="center" minW="0">
+                                <IconButton
+                                  icon={
+                                    playingAudioId === msg.id ? (
+                                      <Pause size={16} style={{ display: "block" }} />
+                                    ) : (
+                                      <Play size={16} style={{ display: "block" }} />
+                                    )
+                                  }
+                                  size="xs"
+                                  aria-label="Play/Pause"
+                                  bg="rgba(255,255,255,0.10)"
+                                  border="1px solid rgba(255,255,255,0.12)"
+                                  _hover={{ bg: "rgba(255,255,255,0.14)" }}
+                                  onClick={() => toggleAudioPlayback(msg.id, msg.file_url)}
+                                  h="34px"
+                                  w="34px"
+                                  minW="34px"
+                                  borderRadius="12px"
+                                  {...iconBtnSquare}
+                                />
+                                <Box flex="1" minW="0">
+                                  <HStack justify="space-between" mb={1}>
+                                    <Text fontSize="12px" fontWeight="700">
+                                      Ovozli
+                                    </Text>
+                                    <Text fontSize="10px" color="whiteAlpha.700">
+                                      {formatTime(cur)} / {formatTime(dur)}
+                                    </Text>
+                                  </HStack>
+                                  <Progress
+                                    value={pct}
+                                    size="xs"
+                                    borderRadius="full"
+                                    bg="rgba(255,255,255,0.10)"
+                                    colorScheme="blue"
+                                    h="3px"
+                                  />
+                                </Box>
+                              </HStack>
+                            </Box>
+                          )}
+
+                          {msg.type === "file" && msg.file_url && (
+                            <Box pr={8} minW="0">
+                              <HStack spacing={2} align="center" minW="0">
+                                <Box
+                                  w="34px"
+                                  h="34px"
+                                  borderRadius="12px"
+                                  bg="rgba(255,255,255,0.10)"
+                                  border="1px solid rgba(255,255,255,0.12)"
+                                  display="flex"
+                                  alignItems="center"
+                                  justifyContent="center"
+                                  flexShrink={0}
+                                >
+                                  <Paperclip size={14} />
+                                </Box>
+
+                                <Box flex="1" minW="0">
+                                  <Text fontSize="12px" fontWeight="700" noOfLines={1}>
+                                    {String(msg.file_url).split("/").pop()}
                                   </Text>
                                   <Text fontSize="10px" color="whiteAlpha.700">
-                                    {formatTime(cur)} / {formatTime(dur)}
+                                    Fayl
                                   </Text>
+                                </Box>
+
+                                <HStack spacing={1} flexShrink={0}>
+                                  <Tooltip label="Open" fontSize="xs">
+                                    <IconButton
+                                      as="a"
+                                      href={fileUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      icon={<ExternalLink size={14} style={{ display: "block" }} />}
+                                      size="xs"
+                                      aria-label="Open"
+                                      bg="rgba(255,255,255,0.10)"
+                                      border="1px solid rgba(255,255,255,0.12)"
+                                      _hover={{ bg: "rgba(255,255,255,0.14)" }}
+                                      h="30px"
+                                      w="30px"
+                                      minW="30px"
+                                      borderRadius="10px"
+                                      {...iconBtnSquare}
+                                    />
+                                  </Tooltip>
+
+                                  <Tooltip label="Download" fontSize="xs">
+                                    <IconButton
+                                      as="a"
+                                      href={fileUrl}
+                                      download
+                                      icon={<Download size={14} style={{ display: "block" }} />}
+                                      size="xs"
+                                      aria-label="Download"
+                                      bg="rgba(255,255,255,0.10)"
+                                      border="1px solid rgba(255,255,255,0.12)"
+                                      _hover={{ bg: "rgba(255,255,255,0.14)" }}
+                                      h="30px"
+                                      w="30px"
+                                      minW="30px"
+                                      borderRadius="10px"
+                                      {...iconBtnSquare}
+                                    />
+                                  </Tooltip>
                                 </HStack>
-                                <Progress
-                                  value={pct}
-                                  size="xs"
-                                  borderRadius="full"
-                                  bg="rgba(255,255,255,0.10)"
-                                  colorScheme="blue"
-                                  h="3px"
-                                />
-                              </Box>
-                            </HStack>
-                          </Box>
-                        )}
-
-                        {/* FILE MESSAGE */}
-                        {msg.type === "file" && msg.file_url && (
-                          <Box pr={8}>
-                            <HStack spacing={2} align="center">
-                              <Box
-                                w="32px"
-                                h="32px"
-                                borderRadius="10px"
-                                bg="rgba(255,255,255,0.10)"
-                                border="1px solid rgba(255,255,255,0.12)"
-                                display="flex"
-                                alignItems="center"
-                                justifyContent="center"
-                                flexShrink={0}
-                              >
-                                <Paperclip size={14} />
-                              </Box>
-
-                              <Box flex="1" minW="0">
-                                <Text fontSize="12px" fontWeight="600" noOfLines={1}>
-                                  {String(msg.file_url).split("/").pop()}
-                                </Text>
-                                <Text fontSize="10px" color="whiteAlpha.700">
-                                  Fayl
-                                </Text>
-                              </Box>
-
-                              <HStack spacing={1} flexShrink={0}>
-                                <Tooltip label="Open" fontSize="xs">
-                                  <IconButton
-                                    as="a"
-                                    href={fileUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    icon={<ExternalLink size={14} />}
-                                    size="xs"
-                                    aria-label="Open"
-                                    bg="rgba(255,255,255,0.10)"
-                                    border="1px solid rgba(255,255,255,0.12)"
-                                    _hover={{ bg: "rgba(255,255,255,0.14)" }}
-                                    h="28px"
-                                    w="28px"
-                                    minW="28px"
-                                  />
-                                </Tooltip>
-
-                                <Tooltip label="Download" fontSize="xs">
-                                  <IconButton
-                                    as="a"
-                                    href={fileUrl}
-                                    download
-                                    icon={<Download size={14} />}
-                                    size="xs"
-                                    aria-label="Download"
-                                    bg="rgba(255,255,255,0.10)"
-                                    border="1px solid rgba(255,255,255,0.12)"
-                                    _hover={{ bg: "rgba(255,255,255,0.14)" }}
-                                    h="28px"
-                                    w="28px"
-                                    minW="28px"
-                                  />
-                                </Tooltip>
                               </HStack>
-                            </HStack>
-                          </Box>
-                        )}
-
-                        <Divider mt={2} mb={1.5} borderColor="rgba(255,255,255,0.05)" />
-
-                        <HStack justify="space-between" fontSize="10px" color="whiteAlpha.600">
-                          <Text>
-                            {new Date(msg.created_at).toLocaleString("uz-UZ", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })}
-                          </Text>
-
-                          {msg.is_read && isAdminMessage && (
-                            <Badge
-                              bg="rgba(0,220,130,0.12)"
-                              border="1px solid rgba(0,220,130,0.20)"
-                              color="whiteAlpha.900"
-                              borderRadius="999px"
-                              px={2}
-                              py={0.3}
-                              fontSize="9px"
-                              fontWeight="700"
-                            >
-                              O'qildi
-                            </Badge>
+                            </Box>
                           )}
-                        </HStack>
+
+                          <Divider mt={2.5} mb={1.5} borderColor="rgba(255,255,255,0.05)" />
+                          <HStack justify="space-between" fontSize="10px" color="whiteAlpha.600">
+                            <Text>
+                              {new Date(msg.created_at).toLocaleString("uz-UZ", {
+                                dateStyle: "short",
+                                timeStyle: "short",
+                              })}
+                            </Text>
+
+                            {msg.is_read && isAdminMessage && (
+                              <Badge
+                                bg="rgba(0,220,130,0.12)"
+                                border="1px solid rgba(0,220,130,0.20)"
+                                color="whiteAlpha.900"
+                                borderRadius="999px"
+                                px={2}
+                                py={0.3}
+                                fontSize="9px"
+                                fontWeight="800"
+                              >
+                                O'qildi
+                              </Badge>
+                            )}
+                          </HStack>
+                        </Box>
                       </Box>
                     </Box>
-                  </Box>
 
-                  {isAdminMessage && (
-                    <Avatar
-                      name="Admin"
-                      size="xs"
-                      bg="rgba(30,144,255,0.40)"
-                      color="white"
-                      flexShrink={0}
-                      mt={0.5}
-                    />
-                  )}
-                </Flex>
+                    {isAdminMessage && (
+                      <Avatar
+                        name="Admin"
+                        size="xs"
+                        bg="rgba(30,144,255,0.40)"
+                        color="white"
+                        flexShrink={0}
+                        mb="2px"
+                      />
+                    )}
+                  </Flex>
+                </React.Fragment>
               );
             })
           )}
@@ -1347,7 +1511,7 @@ export default function ChatDetail() {
         <Box {...SHINE_OVERLAY} />
         <Box position="relative" p={{ base: 2.5, md: 3 }}>
           {isRecording && (
-            <VStack spacing={2} mb={3}>
+            <VStack spacing={2} mb={3} align="stretch">
               <HStack justify="space-between" w="full" fontSize="sm">
                 <HStack>
                   <Box
@@ -1357,11 +1521,11 @@ export default function ChatDetail() {
                     borderRadius="full"
                     animation="pulse 1s infinite"
                   />
-                  <Text fontWeight="600" color="whiteAlpha.900">
+                  <Text fontWeight="700" color="whiteAlpha.900">
                     Yozilmoqda...
                   </Text>
                 </HStack>
-                <Text fontWeight="bold" color="red.300" fontSize="sm">
+                <Text fontWeight="800" color="red.300" fontSize="sm">
                   {formatTime(recordingTime)}
                 </Text>
               </HStack>
@@ -1376,7 +1540,7 @@ export default function ChatDetail() {
               <HStack spacing={2} w="full" flexDir={{ base: "column", sm: "row" }}>
                 <Button
                   w="full"
-                  h="36px"
+                  h="38px"
                   colorScheme="red"
                   variant="outline"
                   onClick={cancelRecording}
@@ -1386,7 +1550,7 @@ export default function ChatDetail() {
                 </Button>
                 <Button
                   w="full"
-                  h="36px"
+                  h="38px"
                   colorScheme="green"
                   onClick={stopRecording}
                   fontSize="sm"
@@ -1404,12 +1568,11 @@ export default function ChatDetail() {
               p={2.5}
               bg="rgba(255,255,255,0.05)"
               border="1px solid rgba(255,255,255,0.08)"
-              borderRadius="lg"
+              borderRadius="xl"
               flexWrap="wrap"
-              fontSize="sm"
             >
               <IconButton
-                icon={<Play size={16} />}
+                icon={<Play size={16} style={{ display: "block" }} />}
                 size="xs"
                 aria-label="Preview"
                 bg="rgba(255,255,255,0.08)"
@@ -1419,11 +1582,19 @@ export default function ChatDetail() {
                   const audio = new Audio(URL.createObjectURL(audioBlob));
                   audio.play();
                 }}
-                h="32px"
-                w="32px"
-                minW="32px"
+                h="34px"
+                w="34px"
+                minW="34px"
+                borderRadius="12px"
+                {...iconBtnSquare}
               />
-              <Text flex={1} color="whiteAlpha.800" minW="150px" fontSize="13px">
+              <Text
+                flex={1}
+                color="whiteAlpha.800"
+                minW="160px"
+                fontSize="13px"
+                fontWeight="700"
+              >
                 Ovozli ({formatTime(recordingTime)})
               </Text>
               <Button
@@ -1431,84 +1602,94 @@ export default function ChatDetail() {
                 variant="ghost"
                 color="red.200"
                 onClick={() => setAudioBlob(null)}
-                fontSize="xs"
               >
                 O'chirish
               </Button>
-              <Button
-                size="xs"
-                colorScheme="blue"
-                onClick={sendVoiceMessage}
-                isLoading={sending}
-                fontSize="xs"
-              >
+              <Button size="xs" colorScheme="blue" onClick={sendVoiceMessage} isLoading={sending}>
                 Yuborish
               </Button>
             </HStack>
           )}
 
           {!isRecording && !audioBlob && (
-            <InputGroup size="sm">
-              <Input
-                placeholder="Xabar yozing..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !sending && handleSendMessage()}
-                disabled={sending}
-                {...inputDark}
-              />
-              <InputRightElement width="auto" pr={1}>
-                <HStack spacing={0.5}>
-                  <Tooltip label="Fayl" fontSize="xs">
-                    <IconButton
-                      icon={<Paperclip size={16} />}
-                      variant="ghost"
-                      size="xs"
-                      aria-label="Fayl"
-                      color="whiteAlpha.900"
-                      _hover={{ bg: "rgba(255,255,255,0.06)" }}
-                      h="32px"
-                      w="32px"
-                      minW="32px"
-                    />
-                  </Tooltip>
-                  <Tooltip label="Ovoz" fontSize="xs">
-                    <IconButton
-                      icon={<Mic size={16} />}
-                      variant="ghost"
-                      size="xs"
-                      color="red.200"
-                      onClick={startRecording}
-                      aria-label="Voice"
-                      _hover={{ bg: "rgba(255,255,255,0.06)" }}
-                      h="32px"
-                      w="32px"
-                      minW="32px"
-                    />
-                  </Tooltip>
-                  <IconButton
-                    icon={<Send size={16} />}
-                    size="xs"
-                    aria-label="Yuborish"
-                    onClick={handleSendMessage}
-                    isLoading={sending}
-                    bg="rgba(30,144,255,0.22)"
-                    border="1px solid rgba(30,144,255,0.28)"
-                    color="whiteAlpha.900"
-                    _hover={{ bg: "rgba(30,144,255,0.30)" }}
-                    h="32px"
-                    w="32px"
-                    minW="32px"
+            <HStack spacing={2} align="center">
+              <Tooltip label="Fayl" fontSize="xs">
+                <IconButton
+                  icon={<Paperclip size={16} style={{ display: "block" }} />}
+                  variant="ghost"
+                  aria-label="Fayl"
+                  color="whiteAlpha.900"
+                  _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                  h="42px"
+                  w="42px"
+                  minW="42px"
+                  borderRadius="xl"
+                  {...iconBtnSquare}
+                />
+              </Tooltip>
+
+              <Box flex="1" minW="0">
+                <InputGroup size="sm">
+                  <Input
+                    placeholder="Xabar yozing..."
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !sending && handleSendMessage()}
+                    disabled={sending}
+                    {...inputDark}
                   />
-                </HStack>
-              </InputRightElement>
-            </InputGroup>
+
+                  <InputRightElement
+                    width="auto"
+                    pr={1}
+                    h="42px"
+                    display="flex"
+                    alignItems="center"
+                  >
+                    <HStack spacing={1} align="center">
+                      <Tooltip label="Ovoz" fontSize="xs">
+                        <IconButton
+                          icon={<Mic size={16} style={{ display: "block" }} />}
+                          variant="ghost"
+                          size="sm"
+                          color="red.200"
+                          onClick={startRecording}
+                          aria-label="Voice"
+                          _hover={{ bg: "rgba(255,255,255,0.06)" }}
+                          h="34px"
+                          w="34px"
+                          minW="34px"
+                          borderRadius="12px"
+                          {...iconBtnSquare}
+                        />
+                      </Tooltip>
+
+                      <IconButton
+                        icon={<Send size={16} style={{ display: "block" }} />}
+                        size="sm"
+                        aria-label="Yuborish"
+                        onClick={handleSendMessage}
+                        isLoading={sending}
+                        bg="rgba(30,144,255,0.22)"
+                        border="1px solid rgba(30,144,255,0.28)"
+                        color="whiteAlpha.900"
+                        _hover={{ bg: "rgba(30,144,255,0.30)" }}
+                        h="34px"
+                        w="34px"
+                        minW="34px"
+                        borderRadius="12px"
+                        {...iconBtnSquare}
+                      />
+                    </HStack>
+                  </InputRightElement>
+                </InputGroup>
+              </Box>
+            </HStack>
           )}
         </Box>
       </Box>
 
-      {/* ================= MODALS ================= */}
-      {/* Edit Modal */}
+      {/* ================= MODALS (same) ================= */}
       <Modal isOpen={isEditOpen} onClose={onEditClose} isCentered size="md">
         <ModalOverlay bg="rgba(0,0,0,0.5)" />
         <ModalContent
@@ -1553,7 +1734,6 @@ export default function ChatDetail() {
         </ModalContent>
       </Modal>
 
-      {/* Delete Modal */}
       <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered>
         <ModalOverlay bg="rgba(0,0,0,0.5)" />
         <ModalContent
@@ -1593,19 +1773,20 @@ export default function ChatDetail() {
         </ModalContent>
       </Modal>
 
-      {/* Right-click menu */}
       <Menu isOpen={contextMenu.isOpen} onClose={closeContextMenu}>
         <MenuButton as={Box} position="fixed" top={0} left={0} w={0} h={0} />
         <MenuList
           position="fixed"
           top={`${contextMenu.y}px`}
-          left={`${contextMenu.x}px`}
+          left={`${contextMenu.y}px`}
           zIndex={2000}
           minW="160px"
           bg="rgba(10,18,38,0.95)"
           border="1px solid rgba(255,255,255,0.10)"
           color="whiteAlpha.900"
           fontSize="sm"
+          overflow="hidden"
+          onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.message?.type === "text" && (
             <MenuItem
@@ -1654,7 +1835,6 @@ export default function ChatDetail() {
         </MenuList>
       </Menu>
 
-      {/* Dispute Modal */}
       <Modal isOpen={isDisputeOpen} onClose={onDisputeClose} size="md" isCentered>
         <ModalOverlay bg="rgba(0,0,0,0.5)" />
         <ModalContent
