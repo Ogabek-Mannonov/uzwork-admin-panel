@@ -24,6 +24,7 @@ import {
   TableContainer,
   Stack,
   useBreakpointValue,
+  VStack,
 } from "@chakra-ui/react";
 import { ViewIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
@@ -85,6 +86,12 @@ const badgeOrange = {
   border: "1px solid rgba(255,170,0,0.22)",
 };
 
+const neutralBadge = {
+  bg: "rgba(255,255,255,0.08)",
+  color: "whiteAlpha.900",
+  border: "1px solid rgba(255,255,255,0.12)",
+};
+
 export default function AdminDisputes() {
   const isMobile = useBreakpointValue({ base: true, md: false });
 
@@ -103,13 +110,120 @@ export default function AdminDisputes() {
       open: { label: "Ochiq", badge: badgeOrange },
       in_review: { label: "Ko'rib chiqilmoqda", badge: badgeBlue },
       resolved: { label: "Hal qilingan", badge: badgeGreen },
-      cancelled: { label: "Bekor qilingan", badge: { bg: "rgba(255,255,255,0.08)", color: "whiteAlpha.900", border: "1px solid rgba(255,255,255,0.12)" } },
+      cancelled: { label: "Bekor qilingan", badge: neutralBadge },
     };
-    const m = map[v] || { label: v || "—", badge: { bg: "rgba(255,255,255,0.08)", color: "whiteAlpha.900", border: "1px solid rgba(255,255,255,0.12)" } };
+    const m = map[v] || { label: v || "—", badge: neutralBadge };
     return (
       <Badge {...m.badge} fontSize="sm" px={3} py={1} borderRadius="full">
         {m.label}
       </Badge>
+    );
+  };
+
+  const shortId = (id) => (id ? String(id).slice(0, 8) : "—");
+
+  const formatDate = (d) => {
+    if (!d) return "—";
+    try {
+      return new Date(d).toLocaleString("uz-UZ", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return String(d);
+    }
+  };
+
+  // ✅ user object ni turli backend variantlardan topib olish
+  const getRaisedByUser = (d) => {
+    // eng ko'p ishlatiladigan variantlar:
+    // 1) d.raised_by_user
+    // 2) d.raised_by
+    // 3) d.raisedByUser
+    // 4) role bo'yicha: d.client / d.freelancer
+    return (
+      d?.raised_by_user ||
+      d?.raised_by ||
+      d?.raisedByUser ||
+      (String(d?.raised_by_role || "").toLowerCase() === "client" ? d?.client : null) ||
+      (String(d?.raised_by_role || "").toLowerCase() === "freelancer" ? d?.freelancer : null) ||
+      null
+    );
+  };
+
+  const fullName = (u) =>
+    `${u?.first_name || ""} ${u?.last_name || ""}`.trim() || u?.full_name || u?.name || "";
+
+  const usernameOf = (u) => {
+    const un = u?.username || u?.handle || u?.login;
+    return un ? String(un) : "";
+  };
+
+  // ✅ Raised by UI (Role + username/fullname) + avatar bir xil style
+  const raisedByCell = (d) => {
+    const role = String(d?.raised_by_role || "").toLowerCase();
+    const u = getRaisedByUser(d);
+
+    const roleBadge =
+      role === "client" ? (
+        <Badge {...badgeRed} fontSize="xs" px={2.5} py={1} borderRadius="md">
+          CLIENT
+        </Badge>
+      ) : role === "freelancer" ? (
+        <Badge {...badgePurple} fontSize="xs" px={2.5} py={1} borderRadius="md">
+          FREELANCER
+        </Badge>
+      ) : role === "admin" ? (
+        <Badge {...badgeBlue} fontSize="xs" px={2.5} py={1} borderRadius="md">
+          ADMIN
+        </Badge>
+      ) : (
+        <Badge {...neutralBadge} fontSize="xs" px={2.5} py={1} borderRadius="md">
+          —
+        </Badge>
+      );
+
+    const name = fullName(u);
+    const uname = usernameOf(u);
+
+    // ko'rsatish: username bo'lsa @username, bo'lmasa fullname, bo'lmasa id
+    const primary =
+      uname ? `@${uname}` : name ? name : u?.id ? String(u.id).slice(0, 8) : "—";
+
+    // secondary: fullname (agar primary username bo'lsa)
+    const secondary = uname && name ? name : "";
+
+    return (
+      <HStack spacing={3} align="center">
+        <Avatar
+          size="sm"
+          name={uname || name || role || "User"}
+          src={u?.avatar_url || u?.avatar || undefined}
+          bg="rgba(255,255,255,0.08)"                 // ✅ hammasi bir xil
+          border="1px solid rgba(255,255,255,0.12)"  // ✅ hammasi bir xil
+          color="whiteAlpha.900"
+        />
+        <VStack spacing={0} align="start" minW={0}>
+          <HStack spacing={2} minW={0} wrap="wrap">
+            {roleBadge}
+            <Text
+              fontSize="sm"
+              color="whiteAlpha.900"
+              fontWeight="semibold"
+              noOfLines={1}
+              maxW={{ base: "170px", lg: "220px" }}
+            >
+              {primary}
+            </Text>
+          </HStack>
+
+          {secondary ? (
+            <Text fontSize="xs" color="whiteAlpha.600" noOfLines={1} maxW={{ base: "220px", lg: "260px" }}>
+              {secondary}
+            </Text>
+          ) : null}
+        </VStack>
+      </HStack>
     );
   };
 
@@ -147,29 +261,6 @@ export default function AdminDisputes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, page]);
 
-  const raisedByLabel = (role) => {
-    const v = String(role || "").toLowerCase();
-    if (v === "client") return <Badge {...badgeRed}>Client</Badge>;
-    if (v === "freelancer") return <Badge {...badgePurple}>Freelancer</Badge>;
-    if (v === "admin") return <Badge {...badgeBlue}>Admin</Badge>;
-    return (
-      <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">
-        —
-      </Badge>
-    );
-  };
-
-  const formatDate = (d) => {
-    if (!d) return "—";
-    try {
-      return new Date(d).toLocaleString("uz-UZ", { dateStyle: "medium", timeStyle: "short" });
-    } catch {
-      return String(d);
-    }
-  };
-
-  const shortId = (id) => (id ? String(id).slice(0, 8) : "—");
-
   const empty = useMemo(() => !loading && items.length === 0, [loading, items]);
 
   return (
@@ -180,7 +271,7 @@ export default function AdminDisputes() {
             Nizolar (Disputes)
           </Heading>
           <Text mt={1} color="whiteAlpha.600" fontSize="sm">
-            Status bo‘yicha filter + ko‘rish
+            Status bo'yicha filter + ko'rish
           </Text>
         </Box>
 
@@ -297,7 +388,12 @@ export default function AdminDisputes() {
                   <CardBody position="relative">
                     <Flex justify="space-between" align="start" gap={3}>
                       <Box minW={0}>
-                        <Text color="whiteAlpha.600" fontSize="xs" letterSpacing="0.08em" textTransform="uppercase">
+                        <Text
+                          color="whiteAlpha.600"
+                          fontSize="xs"
+                          letterSpacing="0.08em"
+                          textTransform="uppercase"
+                        >
                           Dispute
                         </Text>
                         <Text color="whiteAlpha.900" fontWeight="bold" mt={1}>
@@ -310,17 +406,9 @@ export default function AdminDisputes() {
                       {getStatusBadge(d.status)}
                     </Flex>
 
-                    <Flex mt={3} justify="space-between" align="center">
-                      <HStack spacing={2}>
-                        <Avatar
-                          size="xs"
-                          name={d.raised_by_role || "User"}
-                          bg="rgba(255,255,255,0.08)"
-                          border="1px solid rgba(255,255,255,0.10)"
-                        />
-                        {raisedByLabel(d.raised_by_role)}
-                      </HStack>
+                    <Box mt={3}>{raisedByCell(d)}</Box>
 
+                    <Flex mt={3} justify="flex-end" align="center">
                       <Link to={`/admin/disputes/${d.id}`}>
                         <Button
                           size="sm"
@@ -330,7 +418,7 @@ export default function AdminDisputes() {
                           border="1px solid rgba(30,144,255,0.20)"
                           _hover={{ bg: "rgba(30,144,255,0.18)" }}
                         >
-                          Ko‘rish
+                          Ko'rish
                         </Button>
                       </Link>
                     </Flex>
@@ -362,7 +450,7 @@ export default function AdminDisputes() {
                   <Box {...SHINE_OVERLAY} />
                   <CardBody position="relative">
                     <Text textAlign="center" color="whiteAlpha.600" py={6}>
-                      Hozircha dispute yo‘q
+                      Hozircha dispute yo'q
                     </Text>
                   </CardBody>
                 </Card>
@@ -415,20 +503,12 @@ export default function AdminDisputes() {
                           </Td>
 
                           <Td borderColor="rgba(255,255,255,0.06)">
-                            <HStack spacing={2}>
-                              <Avatar
-                                size="xs"
-                                name={d.raised_by_role || "User"}
-                                bg="rgba(255,255,255,0.08)"
-                                border="1px solid rgba(255,255,255,0.10)"
-                              />
-                              {raisedByLabel(d.raised_by_role)}
-                            </HStack>
+                            {raisedByCell(d)}
                           </Td>
 
                           <Td borderColor="rgba(255,255,255,0.06)" maxW="420px">
                             <Text color="whiteAlpha.900" noOfLines={2}>
-                              {d.reason || "—"}
+                              {d.reason || "—" }
                             </Text>
                           </Td>
 
@@ -457,7 +537,7 @@ export default function AdminDisputes() {
                       {empty && (
                         <Tr>
                           <Td colSpan={7} textAlign="center" py={10} color="whiteAlpha.600">
-                            Hozircha dispute yo‘q
+                            Hozircha dispute yo'q
                           </Td>
                         </Tr>
                       )}
@@ -472,3 +552,4 @@ export default function AdminDisputes() {
     </Box>
   );
 }
+  
