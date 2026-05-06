@@ -16,23 +16,28 @@ const getToken = () => localStorage.getItem("accessToken");
 const api = async (endpoint, options = {}) => {
   const token = getToken();
 
+  const { headers, ...restOptions } = options;
+
   const config = {
+    ...restOptions,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
+      ...headers,
     },
-    ...options,
   };
+
 
   const response = await fetch(`${API_URL}${endpoint}`, config);
 
   // Token muddati tugagan bo'lsa – login ga yo'naltir
   if (response.status === 401) {
-    localStorage.removeItem("accessToken");
-    window.location.href = "/admin/login";
-    return;
+    console.warn("⚠️ [API Interceptor] 401 Unauthorized xatoligi yuz berdi! (Redirect vaqtinchalik o'chirildi)");
+    // localStorage.removeItem("accessToken");
+    // window.location.href = "/admin/login";
+    // return;
   }
+
 
   // Ba'zi holatlarda response bo'sh bo'lishi mumkin (204, va h.k.)
   let data = null;
