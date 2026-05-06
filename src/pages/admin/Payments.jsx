@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -149,20 +150,8 @@ export default function Payments() {
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
   const [sort, setSort] = useState("created_desc"); // created_desc | created_asc | amount_desc | amount_asc
-
   const [page, setPage] = useState(1);
   const limit = 20;
-
-  const [items, setItems] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit,
-    total: 0,
-    totalPages: 1,
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const params = useMemo(() => {
     const p = { page, limit, q, sort };
@@ -171,29 +160,17 @@ export default function Payments() {
     return p;
   }, [page, limit, q, sort, type, status]);
 
-  const loadPayments = async () => {
-    setLoading(true);
-    setError("");
-
-    try {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "payments", params],
+    queryFn: async () => {
       const res = await fetchMyPayments(params);
-      if (!res?.success) throw new Error(res?.message || "Xatolik");
+      if (!res?.success) throw new Error(res?.message || "To‘lovlarni yuklashda xatolik");
+      return res.data;
+    },
+  });
 
-      setItems(res?.data?.transactions || []);
-      setPagination(
-        res?.data?.pagination || { page: 1, limit, total: 0, totalPages: 1 }
-      );
-    } catch (e) {
-      setError(e?.message || "To‘lovlarni yuklashda xatolik");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadPayments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+  const items = data?.transactions || [];
+  const pagination = data?.pagination || { page: 1, limit, total: 0, totalPages: 1 };
 
   const TypeBadge = ({ v }) => {
     const m = typeMeta[v] || { badge: {}, label: v || "-" };
@@ -404,7 +381,15 @@ export default function Payments() {
         </CardBody>
       </Card>
 
-      {error && (
+      {/* CONTENT */}
+      {isLoading ? (
+        <Flex justify="center" align="center" py={10}>
+          <Spinner size="lg" color="blue.300" thickness="4px" />
+          <Text ml={4} color="whiteAlpha.800">
+            To‘lovlar yuklanmoqda...
+          </Text>
+        </Flex>
+      ) : error ? (
         <Alert
           status="error"
           borderRadius="xl"
@@ -414,19 +399,10 @@ export default function Payments() {
           color="whiteAlpha.900"
         >
           <AlertIcon />
-          {error}
+          <Text>{error?.message || "To'lovlarni yuklashda xato yuz berdi."}</Text>
         </Alert>
-      )}
-
-      {/* CONTENT */}
-      {loading ? (
-        <Flex justify="center" py={10}>
-          <Spinner size="lg" color="blue.300" thickness="4px" />
-          <Text ml={4} color="whiteAlpha.800">
-            To‘lovlar yuklanmoqda...
-          </Text>
-        </Flex>
       ) : isMobile ? (
+
         /* MOBILE: CARDS */
         <Stack spacing={4}>
           {items.length === 0 ? (

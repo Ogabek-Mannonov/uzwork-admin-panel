@@ -1,5 +1,6 @@
 // src/pages/admin/Users.jsx
 import React, { useState, useEffect, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -53,65 +54,43 @@ const inputStyle = {
 };
 
 export default function AdminUsers() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all"); // all | active | blocked
 
-  const toast = useToast();
-
   const normalizePayload = (res) => {
     const payload = res?.data ?? res;
-
     const list =
       payload?.data?.users ||
       payload?.users ||
       payload?.data?.data?.users ||
       [];
-
     return Array.isArray(list) ? list : [];
   };
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const { data: users = [], isLoading, error } = useQuery({
+    queryKey: ["admin", "users"],
+    queryFn: async () => {
+      const res = await api("/admin/users");
+      const allUsers = normalizePayload(res);
+      return allUsers.map((u) => ({
+        ...u,
+        status: u.status ?? "active",
+      }));
+    },
+  });
 
-        const res = await api("/admin/users");
-        const allUsers = normalizePayload(res);
-
-        const normalized = allUsers.map((u) => ({
-          ...u,
-          status: u.status ?? "active",
-        }));
-
-        setUsers(normalized);
-      } catch (err) {
-        console.error("Foydalanuvchilarni olishda xato:", err);
-        setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
-  const toggleStatus = async (userId, nextStatus) => {
-    try {
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ userId, nextStatus }) => {
       const res = await api.patch(`/admin/users/${userId}/status`, { status: nextStatus });
-
-      const payload = res?.data ?? res;
-      const updated = payload?.data?.user || payload?.user;
-
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, ...updated } : u))
-      );
-
+      return res;
+    },
+    onSuccess: (res, variables) => {
+      const { nextStatus } = variables;
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       toast({
         title: "OK",
         description: nextStatus === "blocked" ? "User bloklandi" : "User faollashtirildi",
@@ -119,7 +98,8 @@ export default function AdminUsers() {
         duration: 2000,
         isClosable: true,
       });
-    } catch (e) {
+    },
+    onError: (e) => {
       console.error("Status update error:", e);
       toast({
         title: "Xato",
@@ -128,7 +108,11 @@ export default function AdminUsers() {
         duration: 2500,
         isClosable: true,
       });
-    }
+    },
+  });
+
+  const toggleStatus = (userId, nextStatus) => {
+    toggleStatusMutation.mutate({ userId, nextStatus });
   };
 
   const roleBadge = (role) => {
@@ -193,7 +177,7 @@ export default function AdminUsers() {
     return result;
   }, [users, searchTerm, selectedRole, selectedStatus]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Flex justify="center" align="center" h="70vh">
         <Spinner size="xl" color="blue.300" thickness="4px" />
@@ -215,7 +199,7 @@ export default function AdminUsers() {
         color="whiteAlpha.900"
       >
         <AlertIcon />
-        <Text>{error}</Text>
+        <Text>{error?.message || "Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring."}</Text>
       </Alert>
     );
   }

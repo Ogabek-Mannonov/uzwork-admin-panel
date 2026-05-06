@@ -1,5 +1,6 @@
 // src/pages/admin/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Box,
   Grid,
@@ -266,63 +267,34 @@ function GlassChartCard({
 }
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState(null);
-  const [breakdown, setBreakdown] = useState(null);
-  const [finance, setFinance] = useState(null);
-  const [moderation, setModeration] = useState(null);
-  const [chatStats, setChatStats] = useState(null);
-
-  const [topClients, setTopClients] = useState([]);
-  const [topFreelancers, setTopFreelancers] = useState([]);
-  const [recentActivity, setRecentActivity] = useState([]);
-
-  // ✅ new blocks
-  const [trends, setTrends] = useState(null); // { gmv:[], revenue:[], users:[], deposits:[], withdrawals:[] }
-  const [funnel, setFunnel] = useState(null); // { posted, proposals, contracts, funded, completed }
-  const [alerts, setAlerts] = useState([]); // [{type,title,desc,link?}]
-
   const [range, setRange] = useState("30d");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const normalizePayload = (res) => {
     const payload = res?.data ?? res;
     return payload?.data || payload;
   };
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "dashboard", range],
+    queryFn: async () => {
+      const res = await api(`/admin/dashboard?range=${range}`);
+      return normalizePayload(res);
+    },
+  });
 
-        const res = await api(`/admin/dashboard?range=${range}`);
-        const data = normalizePayload(res);
+  const stats = data?.stats || null;
+  const breakdown = data?.breakdown || null;
+  const finance = data?.finance || null;
+  const moderation = data?.moderation || null;
+  const chatStats = data?.chatStats || null;
 
-        setStats(data?.stats || null);
-        setBreakdown(data?.breakdown || null);
-        setFinance(data?.finance || null);
-        setModeration(data?.moderation || null);
-        setChatStats(data?.chatStats || null);
+  const topClients = Array.isArray(data?.topClients) ? data.topClients : [];
+  const topFreelancers = Array.isArray(data?.topFreelancers) ? data.topFreelancers : [];
+  const recentActivity = Array.isArray(data?.recentActivity) ? data.recentActivity : [];
 
-        setTopClients(Array.isArray(data?.topClients) ? data.topClients : []);
-        setTopFreelancers(Array.isArray(data?.topFreelancers) ? data.topFreelancers : []);
-        setRecentActivity(Array.isArray(data?.recentActivity) ? data.recentActivity : []);
-
-        // ✅ NEW: trends/funnel/alerts (backend qaytarmasa ham UI yiqilmaydi)
-        setTrends(data?.trends || data?.timeSeries || null);
-        setFunnel(data?.funnel || null);
-        setAlerts(Array.isArray(data?.alerts) ? data.alerts : []);
-      } catch (err) {
-        console.error("Dashboard error:", err);
-        setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, [range]);
+  const trends = data?.trends || data?.timeSeries || null;
+  const funnel = data?.funnel || null;
+  const alerts = Array.isArray(data?.alerts) ? data.alerts : [];
 
   const jobBreak = breakdown?.jobs || {
     open: 0,
@@ -408,7 +380,7 @@ export default function AdminDashboard() {
     series.deposits.length ||
     series.withdrawals.length;
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Flex justify="center" align="center" h="70vh" color="whiteAlpha.900">
         <Spinner size="xl" color="blue.300" thickness="4px" />
@@ -430,7 +402,7 @@ export default function AdminDashboard() {
         color="whiteAlpha.900"
       >
         <AlertIcon />
-        <Text>{error}</Text>
+        <Text>{error?.message || "Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring."}</Text>
       </Alert>
     );
   }

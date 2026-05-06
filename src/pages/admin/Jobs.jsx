@@ -1,5 +1,6 @@
 // src/pages/admin/AdminJobs.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -115,49 +116,22 @@ const btnDanger = {
 };
 
 export default function AdminJobs() {
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const navigate = useNavigate();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedBoost, setSelectedBoost] = useState("all");
 
-  const toast = useToast();
-  const navigate = useNavigate();
-
-  // ✅ NEW: delete modal state
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [deleting, setDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // {id, title}
-
-  const formatCreatedAt = (dateStr) => {
-    if (!dateStr || typeof dateStr !== "string") return "—";
-
-    const d = new Date(dateStr);
-    if (!Number.isNaN(d.getTime())) {
-      const dd = String(d.getDate()).padStart(2, "0");
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const yyyy = d.getFullYear();
-      return `${dd}.${mm}.${yyyy}`;
-    }
-
-    const match = dateStr.match(/^(\d{4})\s*M?0?(\d{1,2})\s*(\d{1,2})/);
-    if (match) {
-      const [, year, month, day] = match;
-      return `${day.padStart(2, "0")}.${month.padStart(2, "0")}.${year}`;
-    }
-
-    return dateStr.slice(0, 10).replace(/-/g, ".") || "—";
-  };
 
   const buildBudgetLabel = (job) => {
     if (job?.budget && typeof job.budget === "string") return job.budget;
-
     const min = job?.budget_min ?? job?.budgetMin;
     const max = job?.budget_max ?? job?.budgetMax;
     const currency = job?.currency || "UZS";
-
     if (min != null && max != null) {
       const minN = Number(min);
       const maxN = Number(max);
@@ -166,26 +140,71 @@ export default function AdminJobs() {
       }
       return `${min} - ${max} ${currency}`;
     }
-
     return "Belgilanmagan";
   };
 
-  // ✅ CHANGED: open modal instead of window.confirm
-  const handleAskDelete = (job) => {
-    setDeleteTarget({ id: job.id, title: job.title || "—" });
-    onOpen();
+  const formatCreatedAt = (dateStr) => {
+    if (!dateStr || typeof dateStr !== "string") return "—";
+    const d = new Date(dateStr);
+    if (!Number.isNaN(d.getTime())) {
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      return `${dd}.${mm}.${yyyy}`;
+    }
+    const match = dateStr.match(/^(\d{4})\s*M?0?(\d{1,2})\s*(\d{1,2})/);
+    if (match) {
+      const [, year, month, day] = match;
+      return `${day.padStart(2, "0")}.${month.padStart(2, "0")}.${year}`;
+    }
+    return dateStr.slice(0, 10).replace(/-/g, ".") || "—";
   };
 
-  // ✅ NEW: confirm delete
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget?.id) return;
 
-    try {
-      setDeleting(true);
+  const { data: jobs = [], isLoading, error } = useQuery({
+    queryKey: ["admin", "jobs"],
+    queryFn: async () => {
+      const res = await api("/projects?status=all&limit=1000");
+      const payload = res?.data ?? res;
+      const allJobs =
+        payload?.data?.projects ||
+        payload?.projects ||
+        payload?.data?.data?.projects ||
+        [];
 
-      await api.delete(`/projects/${deleteTarget.id}`);
-      setJobs((prev) => prev.filter((j) => j.id !== deleteTarget.id));
+      return (allJobs || []).map((j) => {
+        const clientName =
+          `${j.client_first_name || ""} ${j.client_last_name || ""}`.trim() ||
+          j.client_name ||
+          j.client_username ||
+          "Noma'lum";
+        const isBoosted = Boolean(j.boosted ?? j.is_boosted ?? j.isBoosted ?? false);
+        const proposalsCount = Number(
+          j.proposals_count ??
+            j.proposalsCount ??
+            j.offers_count ??
+            j.offersCount ??
+            j.bids_count ??
+            j.bidsCount ??
+            0
+        );
+        return {
+          ...j,
+          clientName,
+          isBoosted,
+          proposalsCount: Number.isNaN(proposalsCount) ? 0 : proposalsCount,
+          budgetLabel: buildBudgetLabel(j),
+        };
+      });
+    },
+  });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id) => {
+      await api.delete(`/projects/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "jobs"] });
       toast({
         title: "O'chirildi",
         description: "Loyiha muvaffaqiyatli o'chirildi",
@@ -193,10 +212,10 @@ export default function AdminJobs() {
         duration: 2000,
         isClosable: true,
       });
-
       onClose();
       setDeleteTarget(null);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error("Delete error:", err);
       toast({
         title: "Xato",
@@ -205,65 +224,19 @@ export default function AdminJobs() {
         duration: 3000,
         isClosable: true,
       });
-    } finally {
-      setDeleting(false);
-    }
+    },
+  });
+
+  const handleAskDelete = (job) => {
+    setDeleteTarget({ id: job.id, title: job.title || "—" });
+    onOpen();
   };
 
-  useEffect(() => {
-    const fetchJobs = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const res = await api("/projects?status=all&limit=1000");
-        const payload = res?.data ?? res;
-
-        const allJobs =
-          payload?.data?.projects ||
-          payload?.projects ||
-          payload?.data?.data?.projects ||
-          [];
-
-        const normalized = (allJobs || []).map((j) => {
-          const clientName =
-            `${j.client_first_name || ""} ${j.client_last_name || ""}`.trim() ||
-            j.client_name ||
-            j.client_username ||
-            "Noma'lum";
-
-          const isBoosted = Boolean(j.boosted ?? j.is_boosted ?? j.isBoosted ?? false);
-
-          const proposalsCount = Number(
-            j.proposals_count ??
-              j.proposalsCount ??
-              j.offers_count ??
-              j.offersCount ??
-              j.bids_count ??
-              j.bidsCount ??
-              0
-          );
-
-          return {
-            ...j,
-            clientName,
-            isBoosted,
-            proposalsCount: Number.isNaN(proposalsCount) ? 0 : proposalsCount,
-            budgetLabel: buildBudgetLabel(j),
-          };
-        });
-
-        setJobs(normalized);
-      } catch (err) {
-        console.error("Loyihalarni olishda xato:", err);
-        setError("Loyihalarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchJobs();
-  }, []);
+  const handleConfirmDelete = () => {
+    if (deleteTarget?.id) {
+      deleteMutation.mutate(deleteTarget.id);
+    }
+  };
 
   const filteredJobs = useMemo(() => {
     let result = [...jobs];
@@ -309,7 +282,7 @@ export default function AdminJobs() {
     );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Flex justify="center" align="center" h="70vh">
         <Spinner size="xl" color="blue.300" thickness="4px" />
@@ -331,7 +304,7 @@ export default function AdminJobs() {
         color="whiteAlpha.900"
       >
         <AlertIcon />
-        {error}
+        <Text>{error?.message || "Loyihalarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring."}</Text>
       </Alert>
     );
   }
@@ -507,7 +480,7 @@ export default function AdminJobs() {
       </Card>
 
       {/* ✅ DELETE CONFIRM MODAL */}
-      <Modal isOpen={isOpen} onClose={deleting ? () => {} : onClose} isCentered>
+      <Modal isOpen={isOpen} onClose={deleteMutation.isPending ? () => {} : onClose} isCentered>
         <ModalOverlay bg="rgba(0,0,0,0.6)" />
         <ModalContent
           bg="rgba(10, 18, 38, 0.92)"
@@ -519,20 +492,20 @@ export default function AdminJobs() {
           mx={4}
         >
           <ModalHeader>O'chirishni tasdiqlang</ModalHeader>
-          <ModalCloseButton isDisabled={deleting} />
+          <ModalCloseButton isDisabled={deleteMutation.isPending} />
           <ModalBody>
             <Text color="whiteAlpha.800">
               <b>{deleteTarget?.title || "—"}</b> loyihasini o'chirmoqchimisiz? Bu amal ortga qaytmaydi.
             </Text>
           </ModalBody>
           <ModalFooter gap={3} flexDir={{ base: "column", sm: "row" }} w="full">
-            <Button {...btnGhost} onClick={onClose} isDisabled={deleting} w="full">
+            <Button {...btnGhost} onClick={onClose} isDisabled={deleteMutation.isPending} w="full">
               Bekor qilish
             </Button>
             <Button
               {...btnDanger}
               onClick={handleConfirmDelete}
-              isLoading={deleting}
+              isLoading={deleteMutation.isPending}
               loadingText="O'chirilmoqda..."
               w="full"
             >

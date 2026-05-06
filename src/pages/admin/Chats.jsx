@@ -1,5 +1,6 @@
 // src/pages/admin/Chats.jsx
 import React, { useState, useEffect, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -32,7 +33,7 @@ import {
   ModalFooter,
   Button,
 } from "@chakra-ui/react";
-import { SearchIcon, MessageSquare } from "lucide-react";
+import { Search, MessageSquare } from "lucide-react";
 import { Ban, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import api from "../../lib/api";
@@ -117,91 +118,71 @@ const btnSuccess = {
 };
 
 export default function AdminChats() {
-  const [chats, setChats] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [busyId, setBusyId] = useState(null);
+  const queryClient = useQueryClient();
   const toast = useToast();
 
-  // ✅ confirm modal for block/unblock
+  const [searchTerm, setSearchTerm] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [confirming, setConfirming] = useState(false);
   const [target, setTarget] = useState(null); // { chat_id, nextStatus, currentStatus, partnerName }
+
+  const { data: chats = [], isLoading } = useQuery({
+    queryKey: ["admin", "chats"],
+    queryFn: async () => {
+      const res = await api("/messages");
+      let fetchedChats = [];
+      if (res.data?.chats && Array.isArray(res.data.chats)) fetchedChats = res.data.chats;
+      else if (res.data?.data?.chats) fetchedChats = res.data.data.chats;
+      else if (Array.isArray(res.data)) fetchedChats = res.data;
+
+      return (fetchedChats || []).map((c) => ({
+        ...c,
+        status: c.status ?? "active",
+      }));
+    },
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ chat_id, nextStatus }) => {
+      await api.patch(`/messages/chats/${chat_id}/status`, {
+        status: nextStatus,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "chats"] });
+      toast({
+        title: "OK",
+        description: "Chat holati yangilandi",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+      onClose();
+      setTarget(null);
+    },
+    onError: (err) => {
+      console.error("Chat status update error:", err);
+      toast({
+        title: "Xato",
+        description: "Holatni o'zgartirishda xato yuz berdi",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    },
+  });
 
   useEffect(() => {
     socket.connect();
-
-    const fetchChats = async () => {
-      try {
-        const res = await api("/messages");
-
-        let fetchedChats = [];
-        if (res.data?.chats && Array.isArray(res.data.chats)) fetchedChats = res.data.chats;
-        else if (res.data?.data?.chats) fetchedChats = res.data.data.chats;
-        else if (Array.isArray(res.data)) fetchedChats = res.data;
-
-        const normalized = (fetchedChats || []).map((c) => ({
-          ...c,
-          status: c.status ?? "active",
-        }));
-
-        setChats(normalized);
-      } catch (err) {
-        console.error("Chatlarni olishda xato:", err);
-        setChats([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchChats();
-
-    socket.on("newMessage", (newMessage) => {
-      setChats((prevChats) =>
-        prevChats.map((chat) => {
-          if (chat.chat_id === newMessage.chat_id) {
-            return {
-              ...chat,
-              last_message_content: newMessage.content,
-              last_message_at: newMessage.created_at,
-              unread_count: (chat.unread_count || 0) + 1,
-            };
-          }
-          return chat;
-        })
-      );
-
-      toast({
-        title: "Yangi xabar!",
-        description: `Yangi xabar: ${newMessage.content?.slice(0, 30) || "..."}`,
-        status: "info",
-        duration: 3500,
-        isClosable: true,
-      });
-    });
-
-    socket.on("unreadUpdate", ({ chatId, unreadCount }) => {
-      setChats((prev) => prev.map((chat) => (chat.chat_id === chatId ? { ...chat, unread_count: unreadCount } : chat)));
-    });
-
-    socket.on("chatStatusUpdated", ({ chat_id, status }) => {
-      setChats((prev) => prev.map((c) => (c.chat_id === chat_id ? { ...c, status } : c)));
-    });
-
     return () => {
-      socket.off("newMessage");
-      socket.off("unreadUpdate");
-      socket.off("chatStatusUpdated");
-      socket.disconnect();
+      // socket.disconnect(); // optional
     };
-  }, [toast]);
+  }, []);
 
   const statusBadge = (status) => {
     const isActive = (status ?? "active") === "active";
     return isActive ? <Badge {...badgeGreen}>ACTIVE</Badge> : <Badge {...badgeRed}>BLOCKED</Badge>;
   };
 
-  // ✅ open confirm modal
   const askToggleChatStatus = (chat) => {
     const currentStatus = chat.status ?? "active";
     const nextStatus = currentStatus === "blocked" ? "active" : "blocked";
@@ -216,45 +197,12 @@ export default function AdminChats() {
     onOpen();
   };
 
-  // ✅ confirmed action (same route)
-  const confirmToggleChatStatus = async () => {
-    if (!target?.chat_id) return;
-
-    try {
-      setConfirming(true);
-      setBusyId(target.chat_id);
-
-      const res = await api.patch(`/messages/chats/${target.chat_id}/status`, { status: target.nextStatus });
-
-      const payload = res?.data ?? res;
-      const updated = payload?.data?.chat || payload?.chat || { id: target.chat_id, status: target.nextStatus };
-
-      setChats((prev) =>
-        prev.map((c) => (c.chat_id === target.chat_id ? { ...c, status: updated.status ?? target.nextStatus } : c))
-      );
-
-      toast({
-        title: "OK",
-        description: target.nextStatus === "blocked" ? "Chat bloklandi" : "Chat faollashtirildi",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
+  const handleConfirmToggle = () => {
+    if (target) {
+      toggleStatusMutation.mutate({
+        chat_id: target.chat_id,
+        nextStatus: target.nextStatus,
       });
-
-      onClose();
-      setTarget(null);
-    } catch (err) {
-      console.error("Chat status update error:", err);
-      toast({
-        title: "Xato",
-        description: "Chat statusini o‘zgartirishda xato",
-        status: "error",
-        duration: 2500,
-        isClosable: true,
-      });
-    } finally {
-      setConfirming(false);
-      setBusyId(null);
     }
   };
 
@@ -267,7 +215,7 @@ export default function AdminChats() {
     });
   }, [chats, searchTerm]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Flex justify="center" align="center" minH="70vh">
         <Spinner size="xl" color="blue.300" thickness="4px" />
@@ -303,7 +251,7 @@ export default function AdminChats() {
           <Flex gap={4} wrap="wrap" align="center" direction={{ base: "column", md: "row" }}>
             <InputGroup w="full" maxW={{ base: "100%", md: "520px" }}>
               <InputLeftElement pointerEvents="none">
-                <SearchIcon color="rgba(255,255,255,0.55)" />
+                <Search size={18} color="rgba(255,255,255,0.55)" />
               </InputLeftElement>
               <Input
                 placeholder="Foydalanuvchi yoki job/contract bo‘yicha qidirish..."
@@ -414,7 +362,6 @@ export default function AdminChats() {
                               color="whiteAlpha.900"
                               border={isBlocked ? "1px solid rgba(0,220,130,0.20)" : "1px solid rgba(255,0,80,0.18)"}
                               _hover={{ bg: isBlocked ? "rgba(0,220,130,0.16)" : "rgba(255,0,80,0.14)" }}
-                              isLoading={busyId === chat.chat_id}
                               onClick={() => askToggleChatStatus(chat)}
                             />
                           </HStack>
@@ -436,7 +383,7 @@ export default function AdminChats() {
       </Card>
 
       {/* ✅ CONFIRM MODAL (block/unblock) */}
-      <Modal isOpen={isOpen} onClose={confirming ? () => {} : onClose} isCentered>
+      <Modal isOpen={isOpen} onClose={toggleStatusMutation.isPending ? () => {} : onClose} isCentered>
         <ModalOverlay bg="rgba(0,0,0,0.6)" />
         <ModalContent
           bg="rgba(10, 18, 38, 0.92)"
@@ -448,7 +395,7 @@ export default function AdminChats() {
           mx={4}
         >
           <ModalHeader>{target?.nextStatus === "blocked" ? "Chatni bloklash" : "Chatni faollashtirish"}</ModalHeader>
-          <ModalCloseButton isDisabled={confirming} />
+          <ModalCloseButton isDisabled={toggleStatusMutation.isPending} />
           <ModalBody>
             <Text color="whiteAlpha.800">
               <b>{target?.partnerName || "Foydalanuvchi"}</b> bilan chat{" "}
@@ -458,13 +405,13 @@ export default function AdminChats() {
             </Text>
           </ModalBody>
           <ModalFooter gap={3} flexDir={{ base: "column", sm: "row" }} w="full">
-            <Button {...btnGhost} onClick={onClose} isDisabled={confirming} w="full">
+            <Button {...btnGhost} onClick={onClose} isDisabled={toggleStatusMutation.isPending} w="full">
               Bekor qilish
             </Button>
             <Button
               {...(target?.nextStatus === "blocked" ? btnDanger : btnSuccess)}
-              onClick={confirmToggleChatStatus}
-              isLoading={confirming}
+              onClick={handleConfirmToggle}
+              isLoading={toggleStatusMutation.isPending}
               loadingText="Bajarilmoqda..."
               w="full"
             >

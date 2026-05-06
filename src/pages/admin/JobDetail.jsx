@@ -1,5 +1,6 @@
 // src/pages/admin/JobDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -141,29 +142,11 @@ export default function JobDetail() {
   const { jobId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const queryClient = useQueryClient();
 
-  // delete modal
-  const {
-    isOpen: isDeleteOpen,
-    onOpen: onDeleteOpen,
-    onClose: onDeleteClose,
-  } = useDisclosure();
-  const [deleting, setDeleting] = useState(false);
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
+  const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
 
-  // edit modal
-  const {
-    isOpen: isEditOpen,
-    onOpen: onEditOpen,
-    onClose: onEditClose,
-  } = useDisclosure();
-  const [saving, setSaving] = useState(false);
-
-  const [job, setJob] = useState(null);
-  const [proposals, setProposals] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // edit form
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -171,7 +154,7 @@ export default function JobDetail() {
     currency: "UZS",
     budget_min: "",
     budget_max: "",
-    deadline: "", // yyyy-mm-dd
+    deadline: "",
     required_skills_text: "",
     is_boosted: false,
   });
@@ -182,7 +165,6 @@ export default function JobDetail() {
     if (!j) return null;
     return {
       ...j,
-      // backendda ba'zan is_boosted / boosted keladi
       is_boosted: Boolean(j.is_boosted ?? j.boosted ?? j.isBoosted ?? false),
       required_skills: safeArr(j.required_skills ?? j.skills ?? j.requiredSkills),
       budget_min: j.budget_min ?? j.budgetMin ?? null,
@@ -190,50 +172,99 @@ export default function JobDetail() {
     };
   };
 
-  useEffect(() => {
-    const fetchJobAndProposals = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const { data: jobAndProposals, isLoading, error } = useQuery({
+    queryKey: ["admin", "job", jobId],
+    queryFn: async () => {
+      const [jobRes, proposalsRes] = await Promise.all([
+        api(`/admin/jobs/${jobId}`),
+        api(`/proposals/project/${jobId}`),
+      ]);
 
-        const jobRes = await api(`/admin/jobs/${jobId}`);
-        const jobRaw = jobRes?.data?.job || jobRes?.data?.data?.job || jobRes?.job || null;
-        const normalized = normalizeJob(jobRaw);
-        setJob(normalized);
+      const jobRaw = jobRes?.data?.job || jobRes?.data?.data?.job || jobRes?.job || null;
+      const normalized = normalizeJob(jobRaw);
+      const proposals = proposalsRes?.data?.proposals || proposalsRes?.data?.data?.proposals || [];
 
-        const proposalsRes = await api(`/proposals/project/${jobId}`);
-        setProposals(proposalsRes?.data?.proposals || proposalsRes?.data?.data?.proposals || []);
+      if (normalized) {
+        const dl = normalized.deadline ? new Date(normalized.deadline) : null;
+        const deadlineStr =
+          dl && !Number.isNaN(dl.getTime())
+            ? `${dl.getFullYear()}-${String(dl.getMonth() + 1).padStart(2, "0")}-${String(dl.getDate()).padStart(2, "0")}`
+            : "";
 
-        // init edit form
-        if (normalized) {
-          const dl = normalized.deadline ? new Date(normalized.deadline) : null;
-          const deadlineStr =
-            dl && !Number.isNaN(dl.getTime())
-              ? `${dl.getFullYear()}-${String(dl.getMonth() + 1).padStart(2, "0")}-${String(dl.getDate()).padStart(2, "0")}`
-              : "";
-
-          setForm({
-            title: normalized.title || "",
-            description: normalized.description || "",
-            status: normalized.status || "open",
-            currency: normalized.currency || "UZS",
-            budget_min: normalized.budget_min ?? "",
-            budget_max: normalized.budget_max ?? "",
-            deadline: deadlineStr,
-            required_skills_text: skillsToText(normalized.required_skills),
-            is_boosted: Boolean(normalized.is_boosted),
-          });
-        }
-      } catch (err) {
-        console.error("Loyiha va takliflar olishda xato:", err);
-        setError("Ma'lumotlarni yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
-      } finally {
-        setLoading(false);
+        setForm({
+          title: normalized.title || "",
+          description: normalized.description || "",
+          status: normalized.status || "open",
+          currency: normalized.currency || "UZS",
+          budget_min: normalized.budget_min ?? "",
+          budget_max: normalized.budget_max ?? "",
+          deadline: deadlineStr,
+          required_skills_text: skillsToText(normalized.required_skills),
+          is_boosted: Boolean(normalized.is_boosted),
+        });
       }
-    };
 
-    if (jobId) fetchJobAndProposals();
-  }, [jobId]);
+      return { job: normalized, proposals };
+    },
+  });
+
+  const job = jobAndProposals?.job || null;
+  const proposals = jobAndProposals?.proposals || [];
+
+  const updateMutation = useMutation({
+    mutationFn: async (payload) => {
+      await api.put(`/admin/jobs/${jobId}`, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "job", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "jobs"] });
+      onEditClose();
+      toast({
+        title: "Saqlandi",
+        description: "Loyiha ma'lumotlari yangilandi",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    },
+    onError: (err) => {
+      console.error("Update error:", err);
+      toast({
+        title: "Xato",
+        description: "Saqlashda xato yuz berdi",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await api.delete(`/projects/${jobId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "jobs"] });
+      toast({
+        title: "O'chirildi",
+        description: "Loyiha muvaffaqiyatli o'chirildi",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+      navigate("/admin/jobs");
+    },
+    onError: (err) => {
+      console.error("Delete error:", err);
+      toast({
+        title: "Xato",
+        description: "Loyihani o'chirishda xato yuz berdi",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    },
+  });
 
   const getStatusBadge = (status) => {
     const labels = {
@@ -246,26 +277,15 @@ export default function JobDetail() {
     if (status === "in_progress") return <Badge {...badgeBlue}>{labels[status]}</Badge>;
     if (status === "completed") return <Badge {...badgePurple}>{labels[status]}</Badge>;
     if (status === "cancelled") return <Badge {...badgeRed}>{labels[status]}</Badge>;
-    return (
-      <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">
-        {labels[status] || status}
-      </Badge>
-    );
+    return <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900">{labels[status] || status}</Badge>;
   };
 
   const proposalStatusBadge = (s) => {
-    const label =
-      s === "pending" ? "Kutilmoqda" : s === "accepted" ? "Qabul qilingan" : s === "rejected" ? "Rad etilgan" : s;
-
+    const label = s === "pending" ? "Kutilmoqda" : s === "accepted" ? "Qabul qilingan" : s === "rejected" ? "Rad etilgan" : s;
     if (s === "pending") return <Badge {...badgeOrange}>{label}</Badge>;
     if (s === "accepted") return <Badge {...badgeGreen}>{label}</Badge>;
     if (s === "rejected") return <Badge {...badgeRed}>{label}</Badge>;
-
-    return (
-      <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">
-        {label}
-      </Badge>
-    );
+    return <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900">{label}</Badge>;
   };
 
   const budgetLabel = useMemo(() => {
@@ -275,123 +295,26 @@ export default function JobDetail() {
       : "Belgilanmagan";
   }, [job]);
 
-  const openEdit = () => {
-    if (!job) return;
-    // formni yana job bilan sync qilib ochamiz
-    const dl = job.deadline ? new Date(job.deadline) : null;
-    const deadlineStr =
-      dl && !Number.isNaN(dl.getTime())
-        ? `${dl.getFullYear()}-${String(dl.getMonth() + 1).padStart(2, "0")}-${String(dl.getDate()).padStart(2, "0")}`
-        : "";
-
-    setForm({
-      title: job.title || "",
-      description: job.description || "",
-      status: job.status || "open",
-      currency: job.currency || "UZS",
-      budget_min: job.budget_min ?? "",
-      budget_max: job.budget_max ?? "",
-      deadline: deadlineStr,
-      required_skills_text: skillsToText(job.required_skills),
-      is_boosted: Boolean(job.is_boosted),
-    });
-
-    onEditOpen();
+  const handleConfirmSave = () => {
+    const payload = {
+      ...form,
+      budget_min: parseNumberOrNull(form.budget_min),
+      budget_max: parseNumberOrNull(form.budget_max),
+      required_skills: textToSkills(form.required_skills_text),
+    };
+    updateMutation.mutate(payload);
   };
 
-  const handleSaveEdit = async () => {
-    if (!job?.id) return;
-
-    try {
-      setSaving(true);
-
-      const payload = {
-        title: form.title,
-        description: form.description,
-        status: form.status,
-        currency: form.currency,
-        budget_min: parseNumberOrNull(form.budget_min),
-        budget_max: parseNumberOrNull(form.budget_max),
-        deadline: form.deadline ? new Date(form.deadline).toISOString() : null,
-        required_skills: textToSkills(form.required_skills_text),
-        is_boosted: Boolean(form.is_boosted),
-      };
-
-      let updated = null;
-      try {
-        const r1 = await api.put(`/projects/${job.id}`, payload);
-        updated = r1?.data?.job || r1?.data?.data?.job || r1?.data?.project || r1?.data?.data?.project || null;
-      } 
-      catch (err) {
-        console.error("Update error:", err);
-        throw err;
-      }
-
-      const merged = normalizeJob({ ...job, ...(updated || payload) });
-      setJob(merged);
-
-      toast({
-        title: "Saqlandi",
-        description: "Loyiha muvaffaqiyatli yangilandi",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-      });
-
-      onEditClose();
-    } catch (err) {
-      console.error("Update error:", err);
-      toast({
-        title: "Xato",
-        description: "Tahrirlashda xato yuz berdi",
-        status: "error",
-        duration: 2500,
-        isClosable: true,
-      });
-    } finally {
-      setSaving(false);
-    }
+  const handleConfirmDelete = () => {
+    deleteMutation.mutate();
   };
 
-  const handleDelete = async () => {
-    if (!job?.id) return;
-
-    try {
-      setDeleting(true);
-
-      // Jobs listda ham shu endpoint ishlatilgan:
-      await api.delete(`/projects/${job.id}`);
-
-      toast({
-        title: "O'chirildi",
-        description: "Loyiha muvaffaqiyatli o'chirildi",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-      });
-
-      onDeleteClose();
-      navigate("/admin/jobs");
-    } catch (err) {
-      console.error("Delete error:", err);
-      toast({
-        title: "Xato",
-        description: "Loyihani o'chirishda xato yuz berdi",
-        status: "error",
-        duration: 2500,
-        isClosable: true,
-      });
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <Flex justify="center" align="center" h="70vh">
         <Spinner size="xl" color="blue.300" thickness="4px" />
         <Text ml={4} fontSize="lg" color="whiteAlpha.800">
-          Loyiha va takliflar yuklanmoqda...
+          Ma'lumotlar yuklanmoqda...
         </Text>
       </Flex>
     );
@@ -399,470 +322,215 @@ export default function JobDetail() {
 
   if (error || !job) {
     return (
-      <Alert
-        status="error"
-        borderRadius="xl"
-        my={4}
-        bg="rgba(255,0,80,0.10)"
-        border="1px solid rgba(255,0,80,0.18)"
-        color="whiteAlpha.900"
-      >
+      <Alert status="error" borderRadius="xl" my={4} bg="rgba(255,0,80,0.10)" border="1px solid rgba(255,0,80,0.18)" color="whiteAlpha.900">
         <AlertIcon />
-        <Text>{error || "Loyiha topilmadi."}</Text>
+        <Text>{error?.message || "Loyiha topilmadi"}</Text>
       </Alert>
     );
   }
 
   return (
     <Box>
-      {/* Top bar (RESPONSIVE) */}
-      <Flex
-        align={{ base: "stretch", md: "center" }}
-        justify="space-between"
-        mb={6}
-        gap={4}
-        direction={{ base: "column", md: "row" }}
-      >
-        <HStack spacing={3} align="start">
+      <Flex align="center" justify="space-between" mb={6} gap={4} wrap="wrap">
+        <HStack spacing={3}>
           <Link to="/admin/jobs">
             <IconButton aria-label="Back" icon={<ArrowLeft size={20} />} {...btnGhost} />
           </Link>
-
           <Box>
-            <Heading size="lg" color="whiteAlpha.900">
-              Loyiha tafsilotlari
-            </Heading>
-            <Text color="whiteAlpha.600" fontSize="sm">
-              Loyiha, client va takliflar ro'yxati
-            </Text>
+            <Heading size="lg" color="whiteAlpha.900">Loyiha Tafsilotlari</Heading>
+            <Text color="whiteAlpha.600" fontSize="sm">Loyihani boshqarish va takliflarni ko'rish</Text>
           </Box>
         </HStack>
 
-        <Flex gap={3} direction={{ base: "column", sm: "row" }} w={{ base: "full", md: "auto" }}>
-          {/* ✅ REAL EDIT (NO ROUTE) */}
-          <Button {...btnPrimary} onClick={openEdit} w={{ base: "full", md: "auto" }}>
-            <HStack spacing={2}>
-              <Edit2 size={18} />
-              <Text>Tahrirlash</Text>
-            </HStack>
+        <HStack spacing={3} wrap="wrap">
+          <Button {...btnGhost} leftIcon={<Edit2 size={18} />} onClick={onEditOpen}>
+            Tahrirlash
           </Button>
-
-          <Button {...btnDanger} w={{ base: "full", md: "auto" }} onClick={onDeleteOpen}>
-            <HStack spacing={2}>
-              <Trash2 size={18} />
-              <Text>O'chirish</Text>
-            </HStack>
+          <Button {...btnDanger} leftIcon={<Trash2 size={18} />} onClick={onDeleteOpen}>
+            O'chirish
           </Button>
-        </Flex>
+        </HStack>
       </Flex>
 
-      {/* Main card */}
       <Card {...GLASS_CARD} mb={8} position="relative">
         <Box {...SHINE_OVERLAY} />
         <CardHeader position="relative">
-          <Flex justify="space-between" align="start" gap={4} wrap="wrap">
+          <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
             <Box>
-              <Heading size="md" color="whiteAlpha.900">
-                {job.title}
-              </Heading>
-
-              <Flex align="center" gap={3} mt={3} wrap="wrap">
-                {job.is_boosted && (
-                  <Badge bg="rgba(255,214,10,0.12)" border="1px solid rgba(255,214,10,0.20)" color="whiteAlpha.900">
-                    <HStack spacing={1}>
-                      <Star size={16} />
-                      <Text>Boostlangan</Text>
-                    </HStack>
-                  </Badge>
-                )}
-
+              <HStack mb={2}>
                 {getStatusBadge(job.status)}
-
-                <Badge bg="rgba(255,255,255,0.06)" border="1px solid rgba(255,255,255,0.10)" color="whiteAlpha.800">
-                  ID: {job.id}
-                </Badge>
-              </Flex>
+                {job.is_boosted && <Badge {...badgePurple}>BOOSTED</Badge>}
+              </HStack>
+              <Heading size="md" color="whiteAlpha.900">{job.title}</Heading>
+              <Text color="whiteAlpha.500" fontSize="sm" mt={1}>
+                ID: #{job.id} | Yaratilgan: {new Date(job.created_at).toLocaleString()}
+              </Text>
             </Box>
-
-            <Badge {...badgeBlue} borderRadius="full" px={3} py={1.5} fontWeight="semibold">
-              Takliflar: {proposals.length}
-            </Badge>
+            <VStack align="end" spacing={1}>
+              <Text color="whiteAlpha.600" fontSize="xs" textTransform="uppercase">Budjet</Text>
+              <Text color="green.300" fontWeight="bold" fontSize="xl">{budgetLabel}</Text>
+            </VStack>
           </Flex>
         </CardHeader>
 
         <CardBody position="relative">
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
-            <VStack align="stretch" spacing={4}>
+          <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={10}>
+            <VStack align="start" spacing={5}>
               <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Client
-                </Text>
-                <Flex align="center" gap={3} mt={2}>
-                  <Avatar name={job.client_name} size="md" />
-                  <Box>
-                    <Text fontWeight="semibold" color="whiteAlpha.900">
-                      {job.client_name || "Noma'lum"}
-                    </Text>
-                    <Text fontSize="sm" color="whiteAlpha.600">
-                      @{job.client_username || "—"}
-                    </Text>
-                  </Box>
-                </Flex>
+                <Heading size="sm" color="whiteAlpha.700" mb={2} textTransform="uppercase">Tavsif</Heading>
+                <Text color="whiteAlpha.900" whiteSpace="pre-wrap">{job.description}</Text>
               </Box>
-
               <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Byudjet
-                </Text>
-                <Text fontSize="2xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
-                  {budgetLabel}
-                </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Muddat
-                </Text>
-                <Text mt={1} color="whiteAlpha.900">
-                  {job.deadline ? new Date(job.deadline).toLocaleDateString() : "Belgilanmagan"}
-                </Text>
-              </Box>
-            </VStack>
-
-            <VStack align="stretch" spacing={4}>
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Yaratilgan sana
-                </Text>
-                <Text mt={1} color="whiteAlpha.900">
-                  {job.created_at ? new Date(job.created_at).toLocaleDateString() : "—"}
-                </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Takliflar soni
-                </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
-                  {proposals.length} ta
-                </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Kerakli skillar
-                </Text>
-
-                <Wrap mt={2}>
-                  {Array.isArray(job.required_skills) && job.required_skills.length > 0 ? (
-                    job.required_skills.map((skill) => (
-                      <WrapItem key={skill}>
-                        <Tag
-                          size="lg"
-                          borderRadius="full"
-                          bg="rgba(30,144,255,0.10)"
-                          border="1px solid rgba(30,144,255,0.18)"
-                          color="whiteAlpha.900"
-                        >
-                          <TagLabel>{skill}</TagLabel>
+                <Heading size="sm" color="whiteAlpha.700" mb={2} textTransform="uppercase">Talab qilinadigan ko'nikmalar</Heading>
+                <Wrap spacing={2}>
+                  {job.required_skills.length > 0 ? (
+                    job.required_skills.map((s, idx) => (
+                      <WrapItem key={idx}>
+                        <Tag bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">
+                          <TagLabel>{s}</TagLabel>
                         </Tag>
                       </WrapItem>
                     ))
                   ) : (
-                    <Text color="whiteAlpha.600">Skillar kiritilmagan</Text>
+                    <Text color="whiteAlpha.500" fontSize="sm">Belgilanmagan</Text>
                   )}
                 </Wrap>
               </Box>
             </VStack>
-          </SimpleGrid>
 
-          <Divider my={8} borderColor="rgba(255,255,255,0.08)" />
+            <VStack align="start" spacing={5}>
+              <SimpleGrid columns={2} w="full" spacing={5}>
+                <Box>
+                  <Text color="whiteAlpha.500" fontSize="xs" textTransform="uppercase">Muddati</Text>
+                  <Text color="whiteAlpha.900">{job.deadline ? new Date(job.deadline).toLocaleDateString() : "Belgilanmagan"}</Text>
+                </Box>
+                <Box>
+                  <Text color="whiteAlpha.500" fontSize="xs" textTransform="uppercase">Valyuta</Text>
+                  <Text color="whiteAlpha.900">{job.currency || "UZS"}</Text>
+                </Box>
+              </SimpleGrid>
 
-          <Box>
-            <Text fontWeight="semibold" color="whiteAlpha.700" mb={3}>
-              Loyiha tavsifi
-            </Text>
-            <Text color="whiteAlpha.900" whiteSpace="pre-wrap" lineHeight="1.8">
-              {job.description || "—"}
-            </Text>
-          </Box>
+              <Divider borderColor="rgba(255,255,255,0.08)" />
 
-          {/* Proposals */}
-          {proposals.length > 0 ? (
-            <Box mt={10}>
-              <Flex justify="space-between" align="center" mb={4} wrap="wrap" gap={3}>
-                <Heading size="md" color="whiteAlpha.900">
-                  Takliflar ({proposals.length})
-                </Heading>
-                <Badge {...badgePurple} borderRadius="full" px={3} py={1.5}>
-                  pending: {proposals.filter((p) => p.status === "pending").length}
-                </Badge>
-              </Flex>
-
-              <Box overflowX="auto">
-                <Table variant="simple">
-                  <Thead>
-                    <Tr bg="rgba(255,255,255,0.04)">
-                      <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
-                        Freelancer
-                      </Th>
-                      <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
-                        Taklif narxi
-                      </Th>
-                      <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
-                        Muddat
-                      </Th>
-                      <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
-                        Status
-                      </Th>
-                      <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">
-                        Amallar
-                      </Th>
-                    </Tr>
-                  </Thead>
-                  <Tbody>
-                    {proposals.map((p) => (
-                      <Tr key={p.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
-                        <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900" fontWeight="semibold">
-                          {p.freelancer_first_name} {p.freelancer_last_name}
-                        </Td>
-
-                        <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900" fontWeight="semibold">
-                          {p.proposed_price ? `${Number(p.proposed_price).toLocaleString()} so'm` : "Noma'lum"}
-                        </Td>
-
-                        <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.800">
-                          {p.proposed_duration ? `${p.proposed_duration} kun` : "Belgilanmagan"}
-                        </Td>
-
-                        <Td borderColor="rgba(255,255,255,0.06)">{proposalStatusBadge(p.status)}</Td>
-
-                        <Td borderColor="rgba(255,255,255,0.06)">
-                          <Button
-                            as={Link}
-                            to={`/admin/users/${p.freelancer_id}`}
-                            size="sm"
-                            borderRadius="xl"
-                            bg="rgba(30,144,255,0.10)"
-                            border="1px solid rgba(30,144,255,0.18)"
-                            color="whiteAlpha.900"
-                            _hover={{ bg: "rgba(30,144,255,0.14)" }}
-                            w={{ base: "full", sm: "auto" }}
-                          >
-                            Ko'rish
-                          </Button>
-                        </Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
+              <Box w="full">
+                <Heading size="sm" color="whiteAlpha.700" mb={3} textTransform="uppercase">Mijoz (Buyurtmachi)</Heading>
+                <Link to={`/admin/users/${job.client_id}`}>
+                  <Flex p={3} {...SOFT} _hover={{ bg: "rgba(255,255,255,0.09)" }} transition="0.2s">
+                    <Avatar size="sm" name={job.client_name || job.client_username} mr={3} />
+                    <Box>
+                      <Text fontWeight="bold" color="whiteAlpha.900">{job.client_name || job.client_username || "Noma'lum"}</Text>
+                      <Text fontSize="xs" color="whiteAlpha.500">Mijoz profilini ko'rish</Text>
+                    </Box>
+                  </Flex>
+                </Link>
               </Box>
-            </Box>
-          ) : (
-            <Box mt={10}>
-              <Text color="whiteAlpha.600">Hozircha bu loyihaga taklif yuborilmagan</Text>
-            </Box>
-          )}
+            </VStack>
+          </SimpleGrid>
         </CardBody>
       </Card>
 
-      {/* ================= EDIT MODAL ================= */}
-      <Modal isOpen={isEditOpen} onClose={saving ? () => {} : onEditClose} isCentered size={{ base: "full", md: "xl" }}>
-        <ModalOverlay bg="rgba(0,0,0,0.6)" />
-        <ModalContent
-          bg="rgba(10, 18, 38, 0.92)"
-          border="1px solid rgba(255,255,255,0.10)"
-          color="whiteAlpha.900"
-          borderRadius={{ base: "0", md: "2xl" }}
-          boxShadow="0 18px 60px rgba(0,0,0,0.5)"
-          backdropFilter="blur(12px)"
-        >
-          <ModalHeader>Tahrirlash</ModalHeader>
-          <ModalCloseButton isDisabled={saving} />
+      <Card {...GLASS_CARD}>
+        <CardHeader>
+          <Heading size="md" color="whiteAlpha.900">Takliflar ({proposals.length})</Heading>
+        </CardHeader>
+        <CardBody p={0}>
+          <Table variant="simple">
+            <Thead bg="rgba(255,255,255,0.04)">
+              <Tr>
+                <Th color="whiteAlpha.600">Freelancer</Th>
+                <Th color="whiteAlpha.600">Taklif summasi</Th>
+                <Th color="whiteAlpha.600">Status</Th>
+                <Th color="whiteAlpha.600">Sana</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {proposals.length > 0 ? (
+                proposals.map((p) => (
+                  <Tr key={p.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
+                    <Td borderColor="rgba(255,255,255,0.06)">
+                      <Flex align="center">
+                        <Avatar size="xs" name={p.freelancer_name} mr={2} />
+                        <Link to={`/admin/users/${p.freelancer_id}`}>
+                          <Text color="blue.300" _hover={{ textDecoration: "underline" }}>{p.freelancer_name || "Freelancer"}</Text>
+                        </Link>
+                      </Flex>
+                    </Td>
+                    <Td borderColor="rgba(255,255,255,0.06)">
+                      <Text fontWeight="bold" color="green.300">{p.amount?.toLocaleString()} {job.currency}</Text>
+                    </Td>
+                    <Td borderColor="rgba(255,255,255,0.06)">{proposalStatusBadge(p.status)}</Td>
+                    <Td borderColor="rgba(255,255,255,0.06)">
+                      <Text color="whiteAlpha.500" fontSize="sm">{new Date(p.created_at).toLocaleDateString()}</Text>
+                    </Td>
+                  </Tr>
+                ))
+              ) : (
+                <Tr>
+                  <Td colSpan={4} textAlign="center" py={10} color="whiteAlpha.500">Hozircha takliflar yo'q</Td>
+                </Tr>
+              )}
+            </Tbody>
+          </Table>
+        </CardBody>
+      </Card>
+
+      {/* EDIT MODAL */}
+      <Modal isOpen={isEditOpen} onClose={updateMutation.isPending ? () => {} : onEditClose} size="xl">
+        <ModalOverlay backdropFilter="blur(5px)" />
+        <ModalContent bg="rgba(10, 18, 38, 0.95)" border="1px solid rgba(255,255,255,0.15)" color="white">
+          <ModalHeader>Loyihani Tahrirlash</ModalHeader>
+          <ModalCloseButton />
           <ModalBody>
-            <VStack spacing={4} align="stretch">
+            <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel color="whiteAlpha.800">Sarlavha</FormLabel>
-                <Input
-                  value={form.title}
-                  onChange={(e) => setF("title", e.target.value)}
-                  bg="rgba(255,255,255,0.06)"
-                  border="1px solid rgba(255,255,255,0.10)"
-                  borderRadius="xl"
-                  color="whiteAlpha.900"
-                  _placeholder={{ color: "whiteAlpha.600" }}
-                />
+                <FormLabel>Sarlavha</FormLabel>
+                <Input value={form.title} onChange={(e) => setF("title", e.target.value)} bg="whiteAlpha.100" />
               </FormControl>
-
               <FormControl isRequired>
-                <FormLabel color="whiteAlpha.800">Tavsif</FormLabel>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setF("description", e.target.value)}
-                  minH="120px"
-                  bg="rgba(255,255,255,0.06)"
-                  border="1px solid rgba(255,255,255,0.10)"
-                  borderRadius="xl"
-                  color="whiteAlpha.900"
-                  _placeholder={{ color: "whiteAlpha.600" }}
-                />
+                <FormLabel>Tavsif</FormLabel>
+                <Textarea value={form.description} onChange={(e) => setF("description", e.target.value)} bg="whiteAlpha.100" minH="150px" />
               </FormControl>
-
-              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+              <SimpleGrid columns={2} spacing={4} w="full">
                 <FormControl>
-                  <FormLabel color="whiteAlpha.800">Status</FormLabel>
-                  <Select
-                    value={form.status}
-                    onChange={(e) => setF("status", e.target.value)}
-                    bg="rgba(255,255,255,0.06)"
-                    border="1px solid rgba(255,255,255,0.10)"
-                    borderRadius="xl"
-                    color="whiteAlpha.900"
-                  >
-                    <option value="open" style={{ color: "#111" }}>Ochiq</option>
-                    <option value="in_progress" style={{ color: "#111" }}>Jarayonda</option>
-                    <option value="completed" style={{ color: "#111" }}>Tugallangan</option>
-                    <option value="cancelled" style={{ color: "#111" }}>Bekor qilingan</option>
-                  </Select>
+                  <FormLabel>Budjet Min</FormLabel>
+                  <Input type="number" value={form.budget_min} onChange={(e) => setF("budget_min", e.target.value)} bg="whiteAlpha.100" />
                 </FormControl>
-
                 <FormControl>
-                  <FormLabel color="whiteAlpha.800">Valyuta</FormLabel>
-                  <Select
-                    value={form.currency}
-                    onChange={(e) => setF("currency", e.target.value)}
-                    bg="rgba(255,255,255,0.06)"
-                    border="1px solid rgba(255,255,255,0.10)"
-                    borderRadius="xl"
-                    color="whiteAlpha.900"
-                  >
-                    <option value="UZS" style={{ color: "#111" }}>UZS</option>
-                    <option value="USD" style={{ color: "#111" }}>USD</option>
-                  </Select>
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel color="whiteAlpha.800">Budget min</FormLabel>
-                  <Input
-                    type="number"
-                    value={form.budget_min}
-                    onChange={(e) => setF("budget_min", e.target.value)}
-                    bg="rgba(255,255,255,0.06)"
-                    border="1px solid rgba(255,255,255,0.10)"
-                    borderRadius="xl"
-                    color="whiteAlpha.900"
-                  />
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel color="whiteAlpha.800">Budget max</FormLabel>
-                  <Input
-                    type="number"
-                    value={form.budget_max}
-                    onChange={(e) => setF("budget_max", e.target.value)}
-                    bg="rgba(255,255,255,0.06)"
-                    border="1px solid rgba(255,255,255,0.10)"
-                    borderRadius="xl"
-                    color="whiteAlpha.900"
-                  />
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel color="whiteAlpha.800">Deadline</FormLabel>
-                  <Input
-                    type="date"
-                    value={form.deadline}
-                    onChange={(e) => setF("deadline", e.target.value)}
-                    bg="rgba(255,255,255,0.06)"
-                    border="1px solid rgba(255,255,255,0.10)"
-                    borderRadius="xl"
-                    color="whiteAlpha.900"
-                  />
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel color="whiteAlpha.800">Boost</FormLabel>
-                  <Select
-                    value={form.is_boosted ? "1" : "0"}
-                    onChange={(e) => setF("is_boosted", e.target.value === "1")}
-                    bg="rgba(255,255,255,0.06)"
-                    border="1px solid rgba(255,255,255,0.10)"
-                    borderRadius="xl"
-                    color="whiteAlpha.900"
-                  >
-                    <option value="0" style={{ color: "#111" }}>Oddiy</option>
-                    <option value="1" style={{ color: "#111" }}>Boostlangan</option>
-                  </Select>
+                  <FormLabel>Budjet Max</FormLabel>
+                  <Input type="number" value={form.budget_max} onChange={(e) => setF("budget_max", e.target.value)} bg="whiteAlpha.100" />
                 </FormControl>
               </SimpleGrid>
-
               <FormControl>
-                <FormLabel color="whiteAlpha.800">Skills (vergul bilan)</FormLabel>
-                <Input
-                  value={form.required_skills_text}
-                  onChange={(e) => setF("required_skills_text", e.target.value)}
-                  placeholder="React, Node.js, PostgreSQL"
-                  bg="rgba(255,255,255,0.06)"
-                  border="1px solid rgba(255,255,255,0.10)"
-                  borderRadius="xl"
-                  color="whiteAlpha.900"
-                  _placeholder={{ color: "whiteAlpha.600" }}
-                />
-                <Text mt={1} fontSize="xs" color="whiteAlpha.600">
-                  Saqlanganda array bo‘lib ketadi: [{textToSkills(form.required_skills_text).join(", ")}]
-                </Text>
+                <FormLabel>Ko'nikmalar (vergul bilan ajrating)</FormLabel>
+                <Input value={form.required_skills_text} onChange={(e) => setF("required_skills_text", e.target.value)} bg="whiteAlpha.100" />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Status</FormLabel>
+                <Select value={form.status} onChange={(e) => setF("status", e.target.value)} bg="whiteAlpha.100">
+                  <option value="open">Ochiq</option>
+                  <option value="in_progress">Jarayonda</option>
+                  <option value="completed">Tugallangan</option>
+                  <option value="cancelled">Bekor qilingan</option>
+                </Select>
               </FormControl>
             </VStack>
           </ModalBody>
-
-          <ModalFooter gap={3} flexDirection={{ base: "column", sm: "row" }}>
-            <Button {...btnGhost} onClick={onEditClose} isDisabled={saving} w={{ base: "full", sm: "auto" }}>
-              Bekor qilish
-            </Button>
-            <Button
-              {...btnPrimary}
-              onClick={handleSaveEdit}
-              isLoading={saving}
-              loadingText="Saqlanmoqda..."
-              w={{ base: "full", sm: "auto" }}
-            >
-              Saqlash
-            </Button>
+          <ModalFooter gap={3}>
+            <Button variant="ghost" onClick={onEditClose} isDisabled={updateMutation.isPending}>Bekor qilish</Button>
+            <Button {...btnPrimary} isLoading={updateMutation.isPending} onClick={handleConfirmSave}>Saqlash</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* ================= DELETE CONFIRM MODAL ================= */}
-      <Modal isOpen={isDeleteOpen} onClose={deleting ? () => {} : onDeleteClose} isCentered>
-        <ModalOverlay bg="rgba(0,0,0,0.6)" />
-        <ModalContent
-          bg="rgba(10, 18, 38, 0.92)"
-          border="1px solid rgba(255,255,255,0.10)"
-          color="whiteAlpha.900"
-          borderRadius="2xl"
-          boxShadow="0 18px 60px rgba(0,0,0,0.5)"
-          backdropFilter="blur(12px)"
-        >
+      {/* DELETE MODAL */}
+      <Modal isOpen={isDeleteOpen} onClose={deleteMutation.isPending ? () => {} : onDeleteClose}>
+        <ModalOverlay backdropFilter="blur(5px)" />
+        <ModalContent bg="rgba(10, 18, 38, 0.95)" border="1px solid rgba(255,255,255,0.15)" color="white">
           <ModalHeader>O'chirishni tasdiqlang</ModalHeader>
-          <ModalCloseButton isDisabled={deleting} />
-          <ModalBody>
-            <Text color="whiteAlpha.800">
-              <b>{job.title}</b> loyihasini o'chirilsinmi? Bu amal ortga qaytmaydi.
-            </Text>
-          </ModalBody>
-          <ModalFooter gap={3} flexDirection={{ base: "column", sm: "row" }}>
-            <Button {...btnGhost} onClick={onDeleteClose} isDisabled={deleting} w={{ base: "full", sm: "auto" }}>
-              Bekor qilish
-            </Button>
-            <Button
-              {...btnDanger}
-              onClick={handleDelete}
-              isLoading={deleting}
-              loadingText="O'chirilmoqda..."
-              w={{ base: "full", sm: "auto" }}
-            >
-              Ha, o'chirish
-            </Button>
+          <ModalBody>Ushbu loyihani butunlay o'chirib tashlamoqchimisiz? Bu amalni ortga qaytarib bo'lmaydi.</ModalBody>
+          <ModalFooter gap={3}>
+            <Button variant="ghost" onClick={onDeleteClose} isDisabled={deleteMutation.isPending}>Bekor qilish</Button>
+            <Button colorScheme="red" isLoading={deleteMutation.isPending} onClick={handleConfirmDelete}>Ha, o'chirish</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

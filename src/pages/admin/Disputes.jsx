@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -95,14 +96,22 @@ const neutralBadge = {
 export default function AdminDisputes() {
   const isMobile = useBreakpointValue({ base: true, md: false });
 
-  const [items, setItems] = useState([]);
   const [status, setStatus] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // simple pagination
   const [page, setPage] = useState(1);
   const limit = 20;
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "disputes", { status, page }],
+    queryFn: async () => {
+      let url = `/disputes?limit=${limit}&page=${page}`;
+      if (status !== "all") url += `&status=${status}`;
+      const res = await api(url);
+      const payload = res?.data ?? res;
+      return payload?.data?.disputes || payload?.disputes || [];
+    },
+  });
+
+  const items = Array.isArray(data) ? data : [];
 
   const getStatusBadge = (s) => {
     const v = String(s || "").toLowerCase();
@@ -134,13 +143,7 @@ export default function AdminDisputes() {
     }
   };
 
-  // ✅ user object ni turli backend variantlardan topib olish
   const getRaisedByUser = (d) => {
-    // eng ko'p ishlatiladigan variantlar:
-    // 1) d.raised_by_user
-    // 2) d.raised_by
-    // 3) d.raisedByUser
-    // 4) role bo'yicha: d.client / d.freelancer
     return (
       d?.raised_by_user ||
       d?.raised_by ||
@@ -159,7 +162,6 @@ export default function AdminDisputes() {
     return un ? String(un) : "";
   };
 
-  // ✅ Raised by UI (Role + username/fullname) + avatar bir xil style
   const raisedByCell = (d) => {
     const role = String(d?.raised_by_role || "").toLowerCase();
     const u = getRaisedByUser(d);
@@ -186,11 +188,9 @@ export default function AdminDisputes() {
     const name = fullName(u);
     const uname = usernameOf(u);
 
-    // ko'rsatish: username bo'lsa @username, bo'lmasa fullname, bo'lmasa id
     const primary =
       uname ? `@${uname}` : name ? name : u?.id ? String(u.id).slice(0, 8) : "—";
 
-    // secondary: fullname (agar primary username bo'lsa)
     const secondary = uname && name ? name : "";
 
     return (
@@ -199,8 +199,8 @@ export default function AdminDisputes() {
           size="sm"
           name={uname || name || role || "User"}
           src={u?.avatar_url || u?.avatar || undefined}
-          bg="rgba(255,255,255,0.08)"                 // ✅ hammasi bir xil
-          border="1px solid rgba(255,255,255,0.12)"  // ✅ hammasi bir xil
+          bg="rgba(255,255,255,0.08)"
+          border="1px solid rgba(255,255,255,0.12)"
           color="whiteAlpha.900"
         />
         <VStack spacing={0} align="start" minW={0}>
@@ -227,41 +227,7 @@ export default function AdminDisputes() {
     );
   };
 
-  const fetchList = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const qs = new URLSearchParams();
-      qs.set("page", String(page));
-      qs.set("limit", String(limit));
-      if (status !== "all") qs.set("status", status);
-
-      const res = await api(`/disputes?${qs.toString()}`);
-      const payload = res?.data ?? res;
-
-      const disputes =
-        payload?.data?.disputes ||
-        payload?.disputes ||
-        payload?.data?.data?.disputes ||
-        [];
-
-      setItems(Array.isArray(disputes) ? disputes : []);
-    } catch (e) {
-      console.error("Disputes list error:", e);
-      setError("Disputelarni yuklashda xato.");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, page]);
-
-  const empty = useMemo(() => !loading && items.length === 0, [loading, items]);
+  const empty = useMemo(() => !isLoading && items.length === 0, [isLoading, items]);
 
   return (
     <Box>
@@ -280,7 +246,6 @@ export default function AdminDisputes() {
         </Badge>
       </Flex>
 
-      {/* FILTERS */}
       <Card {...GLASS_CARD} mb={6} position="relative">
         <Box {...SHINE_OVERLAY} />
         <CardBody position="relative">
@@ -354,7 +319,7 @@ export default function AdminDisputes() {
         </CardBody>
       </Card>
 
-      {loading && (
+      {isLoading && (
         <Flex justify="center" align="center" py={10}>
           <Spinner size="lg" color="blue.300" thickness="4px" />
           <Text ml={3} color="whiteAlpha.800">
@@ -363,7 +328,7 @@ export default function AdminDisputes() {
         </Flex>
       )}
 
-      {!loading && error && (
+      {error && (
         <Alert
           status="error"
           borderRadius="xl"
@@ -373,14 +338,13 @@ export default function AdminDisputes() {
           color="whiteAlpha.900"
         >
           <AlertIcon />
-          <Text>{error}</Text>
+          <Text>{error?.message || "Bahslarni yuklashda xato yuz berdi."}</Text>
         </Alert>
       )}
 
-      {!loading && !error && (
+      {!isLoading && !error && (
         <>
           {isMobile ? (
-            /* MOBILE: CARDS */
             <Stack spacing={4}>
               {items.map((d) => (
                 <Card key={d.id} {...GLASS_CARD} position="relative">

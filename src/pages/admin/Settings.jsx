@@ -1,5 +1,6 @@
 // src/pages/admin/Settings.jsx
 import React, { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -58,8 +59,7 @@ const inputStyle = {
 
 export default function AdminSettings() {
   const toast = useToast();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
 
   const [settings, setSettings] = useState({
     platformFeePercent: 10,
@@ -73,80 +73,55 @@ export default function AdminSettings() {
     isMaintenance: false,
   });
 
-  // Backend dan sozlamalarni o'qib olish
-  useEffect(() => {
-    let active = true;
-    const fetchSettings = async () => {
-      try {
-        const res = await api("/admin/settings");
-        if (res.success && active) {
-          const s = res.data || {};
-          setSettings({
-            platformFeePercent: s.platform_fee_percent != null ? Number(s.platform_fee_percent) : 10,
-            premiumMonthlyPriceUZS: s.premium_monthly_price_uzs != null ? Number(s.premium_monthly_price_uzs) : 500000,
-            premiumYearlyPriceUZS: s.premium_yearly_price_uzs != null ? Number(s.premium_yearly_price_uzs) : 5000000,
-            escrowDays: s.escrow_days != null ? Number(s.escrow_days) : 30,
-            minWithdrawalUZS: s.min_withdrawal_uzs != null ? Number(s.min_withdrawal_uzs) : 100000,
-            allowedGateways: Array.isArray(s.allowed_gateways) ? s.allowed_gateways : ["Payme", "Click", "Uzcard"],
-            supportEmail: s.support_email || "support@uzwork.uz",
-            supportPhone: s.support_phone || "+998901234567",
-            isMaintenance: s.is_maintenance === true || s.is_maintenance === "true",
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching settings:", err);
-        toast({
-          title: "Xatolik",
-          description: "Sozlamalarni yuklashda xato yuz berdi.",
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-      } finally {
-        if (active) setLoading(false);
+  // Backend dan sozlamalarni o'qib olish va keshga yozish
+  const { isLoading } = useQuery({
+    queryKey: ["admin", "settings"],
+    queryFn: async () => {
+      const res = await api("/admin/settings");
+      if (res.success) {
+        const s = res.data || {};
+        const loadedSettings = {
+          platformFeePercent: s.platform_fee_percent != null ? Number(s.platform_fee_percent) : 10,
+          premiumMonthlyPriceUZS: s.premium_monthly_price_uzs != null ? Number(s.premium_monthly_price_uzs) : 500000,
+          premiumYearlyPriceUZS: s.premium_yearly_price_uzs != null ? Number(s.premium_yearly_price_uzs) : 5000000,
+          escrowDays: s.escrow_days != null ? Number(s.escrow_days) : 30,
+          minWithdrawalUZS: s.min_withdrawal_uzs != null ? Number(s.min_withdrawal_uzs) : 100000,
+          allowedGateways: Array.isArray(s.allowed_gateways) ? s.allowed_gateways : ["Payme", "Click", "Uzcard"],
+          supportEmail: s.support_email || "support@uzwork.uz",
+          supportPhone: s.support_phone || "+998901234567",
+          isMaintenance: s.is_maintenance === true || s.is_maintenance === "true",
+        };
+        setSettings(loadedSettings);
+        return loadedSettings;
       }
-    };
-    fetchSettings();
-    return () => {
-      active = false;
-    };
-  }, [toast]);
+      throw new Error(res.message || "Xatolik yuz berdi");
+    },
+  });
 
-  // Sozlamalarni backend ga saqlash
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const payload = {
-        platform_fee_percent: Number(settings.platformFeePercent),
-        premium_monthly_price_uzs: Number(settings.premiumMonthlyPriceUZS),
-        premium_yearly_price_uzs: Number(settings.premiumYearlyPriceUZS),
-        escrow_days: Number(settings.escrowDays),
-        min_withdrawal_uzs: Number(settings.minWithdrawalUZS),
-        allowed_gateways: settings.allowedGateways,
-        support_email: settings.supportEmail,
-        support_phone: settings.supportPhone,
-        is_maintenance: settings.isMaintenance,
-      };
-
+  // Sozlamalarni backend ga saqlash mutationi
+  const saveMutation = useMutation({
+    mutationFn: async (payload) => {
       const res = await api("/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      if (res.success) {
-        toast({
-          title: "Sozlamalar saqlandi",
-          description: "Platforma sozlamalari muvaffaqiyatli yangilandi.",
-          status: "success",
-          duration: 5000,
-          isClosable: true,
-        });
-      } else {
-        throw new Error(res.message);
+      if (!res.success) {
+        throw new Error(res.message || "Saqlashda xato yuz berdi");
       }
-    } catch (err) {
-      console.error("Error saving settings:", err);
+      return res;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      toast({
+        title: "Sozlamalar saqlandi",
+        description: "Platforma sozlamalari muvaffaqiyatli yangilandi.",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+    onError: (err) => {
       toast({
         title: "Xatolik",
         description: err.message || "Sozlamalarni saqlashda xato yuz berdi.",
@@ -154,9 +129,22 @@ export default function AdminSettings() {
         duration: 5000,
         isClosable: true,
       });
-    } finally {
-      setSaving(false);
-    }
+    },
+  });
+
+  const handleSave = () => {
+    const payload = {
+      platform_fee_percent: Number(settings.platformFeePercent),
+      premium_monthly_price_uzs: Number(settings.premiumMonthlyPriceUZS),
+      premium_yearly_price_uzs: Number(settings.premiumYearlyPriceUZS),
+      escrow_days: Number(settings.escrowDays),
+      min_withdrawal_uzs: Number(settings.minWithdrawalUZS),
+      allowed_gateways: settings.allowedGateways,
+      support_email: settings.supportEmail,
+      support_phone: settings.supportPhone,
+      is_maintenance: settings.isMaintenance,
+    };
+    saveMutation.mutate(payload);
   };
 
   // Gateway qo'shish va o'chirish
@@ -176,7 +164,7 @@ export default function AdminSettings() {
     }));
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Flex minH="400px" justify="center" align="center">
         <Spinner size="xl" color="blue.400" thickness="4px" />
@@ -384,7 +372,7 @@ export default function AdminSettings() {
             colorScheme="blue"
             size="lg"
             px={8}
-            isLoading={saving}
+            isLoading={saveMutation.isPending}
             loadingText="Saqlanmoqda..."
             onClick={handleSave}
             _hover={{ transform: "translateY(-1px)", boxShadow: "lg" }}

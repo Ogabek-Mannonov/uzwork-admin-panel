@@ -1,5 +1,6 @@
 // src/pages/admin/UserDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
   Heading,
@@ -141,12 +142,7 @@ const normalizeUser = (u) => {
 export default function UserDetail() {
   const { userId } = useParams();
   const toast = useToast();
-
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
 
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
@@ -157,23 +153,13 @@ export default function UserDetail() {
     role: "client",
   });
 
-  const fetchUserDetail = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
+  const { data: user, isLoading, error } = useQuery({
+    queryKey: ["admin", "user", userId],
+    queryFn: async () => {
       const res = await api(`/admin/users/${userId}`);
-      const u = normalizePayload(res);
-
-      if (!u) {
-        setUser(null);
-        setError("Foydalanuvchi topilmadi.");
-        return;
-      }
-
-      const safeUser = normalizeUser(u);
-      setUser(safeUser);
-
+      const payload = normalizePayload(res);
+      if (!payload) throw new Error("Foydalanuvchi topilmadi");
+      const safeUser = normalizeUser(payload);
       setForm({
         first_name: safeUser.first_name || "",
         last_name: safeUser.last_name || "",
@@ -181,18 +167,92 @@ export default function UserDetail() {
         phone: safeUser.phone || "",
         role: safeUser.role || "client",
       });
-    } catch (err) {
-      console.error("Foydalanuvchi tafsilotlarini olishda xato:", err);
-      setError("Foydalanuvchi ma'lumotlarini yuklashda xato yuz berdi. Keyinroq urinib ko'ring.");
-    } finally {
-      setLoading(false);
-    }
+      return safeUser;
+    },
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async (nextStatus) => {
+      await api.patch(`/admin/users/${userId}/status`, { status: nextStatus });
+    },
+    onSuccess: (_, nextStatus) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      toast({
+        title: "Muvaffaqiyatli",
+        description: nextStatus === "blocked" ? "User bloklandi" : "User faollashtirildi",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    },
+    onError: (err) => {
+      console.error("Status update error:", err);
+      toast({
+        title: "Xatolik",
+        description: "Statusni o'zgartirishda xato yuz berdi",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    },
+  });
+
+  const saveEditMutation = useMutation({
+    mutationFn: async (payload) => {
+      const res = await api.put(`/admin/users/${userId}`, payload);
+      return normalizePayload(res);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      setIsEditing(false);
+      toast({
+        title: "Saqlandi",
+        description: "Foydalanuvchi ma'lumotlari yangilandi",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    },
+    onError: (err) => {
+      console.error("User update error:", err);
+      toast({
+        title: "Xato",
+        description: "Tahrirlashda xato yuz berdi",
+        status: "error",
+        duration: 2500,
+        isClosable: true,
+      });
+    },
+  });
+
+  const handleToggleStatus = () => {
+    if (!user) return;
+    const nextStatus = user.status === "active" ? "blocked" : "active";
+    const ok = window.confirm(nextStatus === "blocked" ? "Userni bloklamoqchimisiz?" : "Userni faollashtirmoqchimisiz?");
+    if (ok) toggleStatusMutation.mutate(nextStatus);
   };
 
-  useEffect(() => {
-    if (userId) fetchUserDetail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  const handleSaveEdit = () => {
+    saveEditMutation.mutate(form);
+  };
+
+  const startEdit = () => setIsEditing(true);
+  const cancelEdit = () => {
+    if (user) {
+      setForm({
+        first_name: user.first_name || "",
+        last_name: user.last_name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        role: user.role || "client",
+      });
+    }
+    setIsEditing(false);
+  };
+
+  const onChange = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
   /* ================= BADGES ================= */
   const getRoleBadge = (role) => {
@@ -220,7 +280,6 @@ export default function UserDetail() {
     return <Badge bg="rgba(255,255,255,0.08)" color="whiteAlpha.900" border="1px solid rgba(255,255,255,0.12)">{labels[status] || status || "—"}</Badge>;
   };
 
-  /* ================= JOBS SPLIT ================= */
   const activeJobs = useMemo(() => {
     const list = user?.recent_jobs || [];
     return list.filter((j) => j.status === "open" || j.status === "in_progress");
@@ -231,129 +290,18 @@ export default function UserDetail() {
     return list.filter((j) => j.status === "completed");
   }, [user]);
 
-  /* ================= EDIT ================= */
-  const onChange = (key, val) => setForm((p) => ({ ...p, [key]: val }));
-
-  const startEdit = () => setIsEditing(true);
-
-  const cancelEdit = () => {
-    if (!user) return;
-    setForm({
-      first_name: user.first_name || "",
-      last_name: user.last_name || "",
-      email: user.email || "",
-      phone: user.phone || "",
-      role: user.role || "client",
-    });
-    setIsEditing(false);
-  };
-
-  const saveEdit = async () => {
-    if (!user) return;
-
-    try {
-      setSaving(true);
-
-      const res = await api.put(`/admin/users/${user.id}`, {
-        first_name: form.first_name,
-        last_name: form.last_name,
-        email: form.email,
-        phone: form.phone,
-        role: form.role,
-      });
-
-      const updatedRaw = normalizePayload(res) || { ...user, ...form };
-
-      const merged = normalizeUser({
-        ...user,
-        ...updatedRaw,
-        available_balance: updatedRaw.available_balance ?? user.available_balance,
-        escrow_balance: updatedRaw.escrow_balance ?? user.escrow_balance,
-        total_spent: updatedRaw.total_spent ?? user.total_spent,
-        total_earned: updatedRaw.total_earned ?? user.total_earned,
-      });
-
-      setUser(merged);
-      setIsEditing(false);
-
-      toast({
-        title: "Saqlandi",
-        description: "Foydalanuvchi ma'lumotlari yangilandi",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-      });
-    } catch (err) {
-      console.error("User update error:", err);
-      toast({
-        title: "Xato",
-        description: "Tahrirlashda xato yuz berdi",
-        status: "error",
-        duration: 2500,
-        isClosable: true,
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleUserStatus = async () => {
-    if (!user) return;
-
-    const nextStatus = user.status === "active" ? "blocked" : "active";
-    const ok = window.confirm(nextStatus === "blocked" ? "Userni bloklamoqchimisiz?" : "Userni faollashtirmoqchimisiz?");
-    if (!ok) return;
-
-    try {
-      setStatusLoading(true);
-
-      const res = await api.patch(`/admin/users/${user.id}/status`, { status: nextStatus });
-
-      const payload = res?.data ?? res;
-      const updatedRaw = payload?.data?.user || payload?.user || null;
-
-      setUser((prev) =>
-        normalizeUser({
-          ...(prev || {}),
-          ...(updatedRaw || {}),
-          status: updatedRaw?.status ?? nextStatus,
-        })
-      );
-
-      toast({
-        title: "OK",
-        description: nextStatus === "blocked" ? "User bloklandi" : "User faollashtirildi",
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-      });
-    } catch (err) {
-      console.error("Status update error:", err);
-      toast({
-        title: "Xato",
-        description: "Status o‘zgartirishda xato",
-        status: "error",
-        duration: 2500,
-        isClosable: true,
-      });
-    } finally {
-      setStatusLoading(false);
-    }
-  };
-
-  /* ================= STATES ================= */
-  if (loading) {
+  if (isLoading) {
     return (
       <Flex justify="center" align="center" h="70vh">
         <Spinner size="xl" color="blue.300" thickness="4px" />
         <Text ml={4} fontSize="lg" color="whiteAlpha.800">
-          Foydalanuvchi tafsilotlari yuklanmoqda...
+          Ma'lumotlar yuklanmoqda...
         </Text>
       </Flex>
     );
   }
 
-  if (error || !user) {
+  if (error) {
     return (
       <Alert
         status="error"
@@ -364,7 +312,7 @@ export default function UserDetail() {
         color="whiteAlpha.900"
       >
         <AlertIcon />
-        <Text>{error || "Foydalanuvchi topilmadi."}</Text>
+        <Text>{error?.message || "Foydalanuvchi ma'lumotlarini yuklashda xato."}</Text>
       </Alert>
     );
   }
@@ -373,13 +321,11 @@ export default function UserDetail() {
 
   return (
     <Box>
-      {/* Top bar */}
       <Flex align="center" justify="space-between" mb={6} gap={4} wrap="wrap">
         <HStack spacing={3}>
           <Link to="/admin/users">
             <IconButton aria-label="Back" icon={<ArrowLeft size={20} />} {...btnGhost} />
           </Link>
-
           <Box>
             <Heading size="lg" color="whiteAlpha.900">
               Foydalanuvchi tafsilotlari
@@ -403,10 +349,10 @@ export default function UserDetail() {
             </Button>
           ) : (
             <>
-              <Button {...btnGhost} onClick={cancelEdit} isDisabled={saving}>
+              <Button {...btnGhost} onClick={cancelEdit} isDisabled={saveEditMutation.isPending}>
                 Bekor qilish
               </Button>
-              <Button {...btnPrimary} onClick={saveEdit} isLoading={saving}>
+              <Button {...btnPrimary} onClick={handleSaveEdit} isLoading={saveEditMutation.isPending}>
                 Saqlash
               </Button>
             </>
@@ -414,18 +360,16 @@ export default function UserDetail() {
 
           <Button
             {...btnGhost}
-            border={user.status === "active" ? "1px solid rgba(255,0,80,0.20)" : "1px solid rgba(0,220,130,0.22)"}
-            bg={user.status === "active" ? "rgba(255,0,80,0.08)" : "rgba(0,220,130,0.10)"}
-            _hover={{ bg: user.status === "active" ? "rgba(255,0,80,0.12)" : "rgba(0,220,130,0.14)" }}
-            onClick={toggleUserStatus}
-            isLoading={statusLoading}
+            leftIcon={<Shield />}
+            colorScheme={user.status === "active" ? "red" : "green"}
+            onClick={handleToggleStatus}
+            isLoading={toggleStatusMutation.isPending}
           >
             {user.status === "active" ? "Bloklash" : "Faollashtirish"}
           </Button>
         </HStack>
       </Flex>
 
-      {/* Profile card */}
       <Card {...GLASS_CARD} mb={8} position="relative">
         <Box {...SHINE_OVERLAY} />
         <CardHeader position="relative">
@@ -458,7 +402,6 @@ export default function UserDetail() {
 
                 <Flex align="center" gap={3} mt={2} wrap="wrap">
                   <Text color="whiteAlpha.600">@{user.username}</Text>
-
                   {!isEditing ? (
                     getRoleBadge(user.role)
                   ) : (
@@ -480,19 +423,7 @@ export default function UserDetail() {
                       </option>
                     </Select>
                   )}
-
-                  {getStatusBadge(user.status || "active")}
-
-                  {user.is_verified && (
-                    <Badge {...badgeGreen}>
-                      <HStack spacing={1}>
-                        <Shield size={14} />
-                        <Text>Tasdiqlangan</Text>
-                      </HStack>
-                    </Badge>
-                  )}
-
-                  {user.is_premium && <Badge {...badgeYellow}>Premium</Badge>}
+                  {getStatusBadge(user.status)}
                 </Flex>
               </Box>
             </Flex>
@@ -500,217 +431,186 @@ export default function UserDetail() {
         </CardHeader>
 
         <CardBody position="relative">
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8}>
-            {/* Contact */}
-            <VStack align="stretch" spacing={4}>
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Email
-                </Text>
-                <Flex align="center" gap={2} mt={2} color="whiteAlpha.900">
-                  <Mail size={16} />
-                  {!isEditing ? (
-                    <Text>{user.email || "—"}</Text>
-                  ) : (
-                    <Input
-                      value={form.email}
-                      onChange={(e) => onChange("email", e.target.value)}
-                      placeholder="Email"
-                      {...inputStyle}
-                    />
-                  )}
-                </Flex>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Telefon
-                </Text>
-                <Flex align="center" gap={2} mt={2} color="whiteAlpha.900">
-                  <Phone size={16} />
-                  {!isEditing ? (
-                    <Text>{user.phone || "Kiritilmagan"}</Text>
-                  ) : (
-                    <Input
-                      value={form.phone}
-                      onChange={(e) => onChange("phone", e.target.value)}
-                      placeholder="Telefon"
-                      {...inputStyle}
-                    />
-                  )}
-                </Flex>
-              </Box>
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={10}>
+            <VStack align="start" spacing={4}>
+              <Heading size="sm" color="whiteAlpha.700" textTransform="uppercase">
+                Kontakt Ma'lumotlari
+              </Heading>
+              <HStack color="whiteAlpha.900">
+                <Mail size={18} />
+                {!isEditing ? (
+                  <Text>{user.email || "—"}</Text>
+                ) : (
+                  <Input
+                    value={form.email}
+                    onChange={(e) => onChange("email", e.target.value)}
+                    placeholder="Email"
+                    {...inputStyle}
+                  />
+                )}
+              </HStack>
+              <HStack color="whiteAlpha.900">
+                <Phone size={18} />
+                {!isEditing ? (
+                  <Text>{user.phone || "—"}</Text>
+                ) : (
+                  <Input
+                    value={form.phone}
+                    onChange={(e) => onChange("phone", e.target.value)}
+                    placeholder="Phone"
+                    {...inputStyle}
+                  />
+                )}
+              </HStack>
             </VStack>
 
-            {/* Balance */}
-            <VStack align="stretch" spacing={4}>
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Available balans
-                </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
+            <VStack align="start" spacing={4}>
+              <Heading size="sm" color="whiteAlpha.700" textTransform="uppercase">
+                Moliyaviy Holat
+              </Heading>
+              <HStack justify="space-between" w="full">
+                <Text color="whiteAlpha.600">Asosiy balans:</Text>
+                <Text fontWeight="bold" color="blue.300">
                   {moneyUZS(user.available_balance)}
                 </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Escrow balans
-                </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
+              </HStack>
+              <HStack justify="space-between" w="full">
+                <Text color="whiteAlpha.600">Escrow (Band):</Text>
+                <Text fontWeight="bold" color="orange.300">
                   {moneyUZS(user.escrow_balance)}
                 </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Jami sarflangan
+              </HStack>
+              <HStack justify="space-between" w="full">
+                <Text color="whiteAlpha.600">
+                  {user.role === "freelancer" ? "Jami ishlagan:" : "Jami sarflagan:"}
                 </Text>
-                <Text fontSize="lg" fontWeight="semibold" mt={1} color="whiteAlpha.900">
-                  {moneyUZS(user.total_spent)}
+                <Text fontWeight="bold" color="green.300">
+                  {moneyUZS(user.role === "freelancer" ? user.total_earned : user.total_spent)}
                 </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Jami ishlab topilgan
-                </Text>
-                <Text fontSize="lg" fontWeight="semibold" mt={1} color="whiteAlpha.900">
-                  {moneyUZS(user.total_earned)}
-                </Text>
-              </Box>
+              </HStack>
             </VStack>
 
-            {/* Misc */}
-            <VStack align="stretch" spacing={4}>
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Ro‘yxatdan o‘tgan
-                </Text>
-                <Text mt={1} color="whiteAlpha.900">
-                  {user.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}
-                </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Rating
-                </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
-                  {user.rating || "Noma'lum"} ⭐
-                </Text>
-              </Box>
-
-              <Box>
-                <Text fontWeight="semibold" color="whiteAlpha.700">
-                  Tugallangan loyihalar
-                </Text>
-                <Text fontSize="xl" fontWeight="bold" mt={1} color="whiteAlpha.900">
-                  {user?.jobs_summary?.completed ?? completedJobs.length ?? 0}
-                </Text>
-              </Box>
+            <VStack align="start" spacing={4}>
+              <Heading size="sm" color="whiteAlpha.700" textTransform="uppercase">
+                Platforma Faolligi
+              </Heading>
+              <HStack justify="space-between" w="full">
+                <Text color="whiteAlpha.600">A'zo bo'ldi:</Text>
+                <Text color="whiteAlpha.900">{new Date(user.created_at).toLocaleDateString()}</Text>
+              </HStack>
+              <HStack justify="space-between" w="full">
+                <Text color="whiteAlpha.600">Jami loyihalar:</Text>
+                <Badge {...badgePurple}>{user.jobs_summary?.total || 0}</Badge>
+              </HStack>
+              <HStack justify="space-between" w="full">
+                <Text color="whiteAlpha.600">Tugallangan:</Text>
+                <Badge {...badgeGreen}>{user.jobs_summary?.completed || 0}</Badge>
+              </HStack>
             </VStack>
           </SimpleGrid>
-
-          {user.jobs_summary && (
-            <>
-              <Divider my={6} borderColor="rgba(255,255,255,0.08)" />
-              <HStack spacing={3} wrap="wrap">
-                <Badge {...badgeBlue}>Jami: {user.jobs_summary.total}</Badge>
-                <Badge {...badgeGreen}>Active: {user.jobs_summary.active}</Badge>
-                <Badge {...badgeBlue}>In progress: {user.jobs_summary.in_progress}</Badge>
-                <Badge {...badgePurple}>Completed: {user.jobs_summary.completed}</Badge>
-                <Badge {...badgeRed}>Cancelled: {user.jobs_summary.cancelled}</Badge>
-              </HStack>
-            </>
-          )}
         </CardBody>
       </Card>
 
-      {/* Jobs section */}
-      <Card {...GLASS_CARD} position="relative">
-        <Box {...SHINE_OVERLAY} />
-        <CardHeader position="relative">
-          <Heading size="md" color="whiteAlpha.900">
-            Loyihalar
-          </Heading>
-          <Text mt={1} color="whiteAlpha.600" fontSize="sm">
-            Jarayondagi va tugallangan loyihalar ro‘yxati
-          </Text>
-        </CardHeader>
-
-        <CardBody position="relative">
-          {/* Active */}
-          <Heading size="sm" mb={3} color="whiteAlpha.900">
-            Jarayondagi loyihalar
-          </Heading>
-
-          {activeJobs.length > 0 ? (
-            <Box overflowX="auto" mb={8}>
-              <Table variant="simple">
-                <Thead>
-                  <Tr bg="rgba(255,255,255,0.04)">
-                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Loyiha nomi</Th>
-                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Byudjet</Th>
-                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Status</Th>
-                  </Tr>
-                </Thead>
-                <Tbody>
-                  {activeJobs.map((job) => (
-                    <Tr key={job.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
-                      <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900">
-                        {job.title}
+      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={8}>
+        <Card {...GLASS_CARD}>
+          <CardHeader>
+            <Heading size="md" color="whiteAlpha.900">
+              Faol Loyihalar
+            </Heading>
+          </CardHeader>
+          <CardBody p={0}>
+            <Table variant="simple">
+              <Thead bg="rgba(255,255,255,0.04)">
+                <Tr>
+                  <Th color="whiteAlpha.600">Loyiha</Th>
+                  <Th color="whiteAlpha.600">Status</Th>
+                  <Th color="whiteAlpha.600">Amal</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {activeJobs.length > 0 ? (
+                  activeJobs.map((j) => (
+                    <Tr key={j.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
+                      <Td borderColor="rgba(255,255,255,0.06)">
+                        <Text fontWeight="semibold" color="whiteAlpha.900">
+                          {j.title}
+                        </Text>
+                        <Text fontSize="xs" color="whiteAlpha.500">
+                          {new Date(j.created_at).toLocaleDateString()}
+                        </Text>
                       </Td>
-                      <Td borderColor="rgba(255,255,255,0.06)" fontWeight="semibold" color="whiteAlpha.900">
-                        {job.budget || "Belgilanmagan"}
+                      <Td borderColor="rgba(255,255,255,0.06)">{jobStatusBadge(j.status)}</Td>
+                      <Td borderColor="rgba(255,255,255,0.06)">
+                        <Link to={`/admin/jobs/${j.id}`}>
+                          <Button size="xs" {...btnGhost}>
+                            Ko'rish
+                          </Button>
+                        </Link>
                       </Td>
-                      <Td borderColor="rgba(255,255,255,0.06)">{jobStatusBadge(job.status)}</Td>
                     </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-            </Box>
-          ) : (
-            <Text color="whiteAlpha.600" mb={8}>
-              Jarayonda loyiha yo‘q
-            </Text>
-          )}
-
-          {/* Completed */}
-          <Heading size="sm" mb={3} color="whiteAlpha.900">
-            Tugallangan loyihalar
-          </Heading>
-
-          {completedJobs.length > 0 ? (
-            <Box overflowX="auto">
-              <Table variant="simple">
-                <Thead>
-                  <Tr bg="rgba(255,255,255,0.04)">
-                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Loyiha nomi</Th>
-                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Byudjet</Th>
-                    <Th color="whiteAlpha.700" borderColor="rgba(255,255,255,0.08)">Status</Th>
+                  ))
+                ) : (
+                  <Tr>
+                    <Td colSpan={3} textAlign="center" py={6} color="whiteAlpha.500">
+                      Faol loyihalar yo'q
+                    </Td>
                   </Tr>
-                </Thead>
-                <Tbody>
-                  {completedJobs.map((job) => (
-                    <Tr key={job.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
-                      <Td borderColor="rgba(255,255,255,0.06)" color="whiteAlpha.900">
-                        {job.title}
+                )}
+              </Tbody>
+            </Table>
+          </CardBody>
+        </Card>
+
+        <Card {...GLASS_CARD}>
+          <CardHeader>
+            <Heading size="md" color="whiteAlpha.900">
+              Tugallangan Loyihalar
+            </Heading>
+          </CardHeader>
+          <CardBody p={0}>
+            <Table variant="simple">
+              <Thead bg="rgba(255,255,255,0.04)">
+                <Tr>
+                  <Th color="whiteAlpha.600">Loyiha</Th>
+                  <Th color="whiteAlpha.600">Budjet</Th>
+                  <Th color="whiteAlpha.600">Amal</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {completedJobs.length > 0 ? (
+                  completedJobs.map((j) => (
+                    <Tr key={j.id} _hover={{ bg: "rgba(255,255,255,0.04)" }}>
+                      <Td borderColor="rgba(255,255,255,0.06)">
+                        <Text fontWeight="semibold" color="whiteAlpha.900">
+                          {j.title}
+                        </Text>
                       </Td>
-                      <Td borderColor="rgba(255,255,255,0.06)" fontWeight="semibold" color="whiteAlpha.900">
-                        {job.budget || "Belgilanmagan"}
+                      <Td borderColor="rgba(255,255,255,0.06)">
+                        <Text color="green.300" fontWeight="bold">
+                          {moneyUZS(j.budget_min || j.budget)}
+                        </Text>
                       </Td>
-                      <Td borderColor="rgba(255,255,255,0.06)">{jobStatusBadge(job.status)}</Td>
+                      <Td borderColor="rgba(255,255,255,0.06)">
+                        <Link to={`/admin/jobs/${j.id}`}>
+                          <Button size="xs" {...btnGhost}>
+                            Ko'rish
+                          </Button>
+                        </Link>
+                      </Td>
                     </Tr>
-                  ))}
-                </Tbody>
-              </Table>
-            </Box>
-          ) : (
-            <Text color="whiteAlpha.600">Tugallangan loyiha yo‘q</Text>
-          )}
-        </CardBody>
-      </Card>
+                  ))
+                ) : (
+                  <Tr>
+                    <Td colSpan={3} textAlign="center" py={6} color="whiteAlpha.500">
+                      Tugallangan loyihalar yo'q
+                    </Td>
+                  </Tr>
+                )}
+              </Tbody>
+            </Table>
+          </CardBody>
+        </Card>
+      </SimpleGrid>
     </Box>
   );
 }
