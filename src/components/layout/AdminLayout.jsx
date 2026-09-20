@@ -1,7 +1,7 @@
-// src/components/layout/AdminLayout.jsx
 import React from "react";
 import { Box, Flex, useBreakpointValue } from "@chakra-ui/react";
 import { Outlet } from "react-router-dom";
+import { motion } from "framer-motion";
 import Sidebar from "./Sidebar";
 import MobileSidebar from "./MobileSidebar";
 
@@ -60,7 +60,13 @@ export default function AdminLayout() {
           boxShadow="0 22px 60px rgba(0,0,0,0.35)"
           minH="calc(100vh - 64px)"
         >
-          <Outlet />
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
+            <Outlet />
+          </motion.div>
         </Box>
       </Box>
     </Flex>

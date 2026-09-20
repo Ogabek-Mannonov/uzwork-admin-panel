@@ -26,8 +26,9 @@ import {
   useToast,
   Card,
   CardBody,
+  Button,
 } from "@chakra-ui/react";
-import { SearchIcon, EditIcon, NotAllowedIcon, CheckCircleIcon } from "@chakra-ui/icons";
+import { SearchIcon, EditIcon, NotAllowedIcon, CheckCircleIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { Link } from "react-router-dom";
 import api from "../../lib/api";
 
@@ -60,6 +61,10 @@ export default function AdminUsers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all"); // all | active | blocked
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const normalizePayload = (res) => {
     const payload = res?.data ?? res;
@@ -173,9 +178,20 @@ export default function AdminUsers() {
     if (selectedStatus !== "all") {
       result = result.filter((u) => (u.status ?? "active") === selectedStatus);
     }
-
+    
     return result;
   }, [users, searchTerm, selectedRole, selectedStatus]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedRole, selectedStatus]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   if (isLoading) {
     return (
@@ -306,8 +322,8 @@ export default function AdminUsers() {
               </Thead>
 
               <Tbody>
-                {filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => {
+                {paginatedUsers.length > 0 ? (
+                  paginatedUsers.map((user) => {
                     const fullName =
                       `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Noma'lum";
                     const isActive = (user.status ?? "active") === "active";
@@ -396,6 +412,41 @@ export default function AdminUsers() {
               </Tbody>
             </Table>
           </Box>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <Flex justify="space-between" align="center" p={4} borderTop="1px solid rgba(255,255,255,0.08)">
+              <Text color="whiteAlpha.600" fontSize="sm">
+                Jami: {filteredUsers.length} ta foydalanuvchi
+              </Text>
+              <HStack spacing={2}>
+                <Button
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  isDisabled={currentPage === 1}
+                  bg="rgba(255,255,255,0.06)"
+                  color="whiteAlpha.900"
+                  _hover={{ bg: "rgba(255,255,255,0.12)" }}
+                  leftIcon={<ChevronLeftIcon />}
+                >
+                  Oldingi
+                </Button>
+                <Text color="whiteAlpha.800" fontSize="sm" px={2}>
+                  {currentPage} / {totalPages}
+                </Text>
+                <Button
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  isDisabled={currentPage === totalPages}
+                  bg="rgba(255,255,255,0.06)"
+                  color="whiteAlpha.900"
+                  _hover={{ bg: "rgba(255,255,255,0.12)" }}
+                  rightIcon={<ChevronRightIcon />}
+                >
+                  Keyingi
+                </Button>
+              </HStack>
+            </Flex>
+          )}
         </CardBody>
       </Card>
     </Box>
